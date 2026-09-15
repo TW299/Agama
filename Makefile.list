@@ -12,13 +12,13 @@ SOURCES   = interface_c.cpp \
             interface_fortran.cpp \
             interface_nemo.cpp \
             interface_python.cpp \
-            math_core.cpp \
+	    math_core.cpp \
             math_fit.cpp \
             math_gausshermite.cpp \
             math_geometry.cpp \
             math_linalg.cpp \
             math_ode.cpp \
-            math_optimization.cpp \
+	    math_optimization.cpp \
             math_random.cpp \
             math_sample.cpp \
             math_specfunc.cpp \
@@ -55,6 +55,7 @@ SOURCES   = interface_c.cpp \
             potential_disk.cpp \
             potential_factory.cpp \
             potential_ferrers.cpp \
+	    potential_interpolators.cpp \
             potential_king.cpp \
             potential_multipole.cpp \
             potential_perfect_ellipsoid.cpp \
@@ -83,34 +84,12 @@ TORUSSRC  = CHB.cc \
             WD_Numerics.cc \
 
 # test and example programs
-TESTSRCS  = test_math_core.cpp \
-            test_math_linalg.cpp \
-            test_math_spline.cpp \
-            test_coord.cpp \
-            test_units.cpp \
-            test_utils.cpp \
-            test_orbit_integr.cpp \
-            test_orbit_variational.cpp \
-            test_potentials.cpp \
-            test_potential_expansions.cpp \
-            test_potential_modifiers.cpp \
-            test_actions_isochrone.cpp \
-            test_actions_spherical.cpp \
-            test_actions_staeckel.cpp \
-            test_actions_torus.cpp \
-            test_action_finder.cpp \
-            test_df_halo.cpp \
-            test_df_spherical.cpp \
-            test_density_grid.cpp \
-            test_losvd.cpp \
-            test_galaxymodel.cpp \
+TESTSRCS  = test_galaxymodel.cpp \
             example_actions_nbody.cpp \
             example_df_fit.cpp \
             example_doublepowerlaw.cpp \
             example_self_consistent_model.cpp \
             example_self_consistent_model_mw.cpp \
-            mkspherical.cpp \
-            phaseflow.cpp \
-            raga.cpp \
 
-TESTFORTRAN = test_fortran.f
+#TESTFORTRAN = test_fortran.f
+            
