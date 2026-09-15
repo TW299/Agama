@@ -25,7 +25,7 @@ public:
 
     /// the value of a composite DF is simply the sum of values of all its components
     virtual void evalDeriv(const actions::Actions &J,
-        /*output*/ double* value, DerivByActions *deriv=NULL) const
+        /*output*/ double* value, DerivByActions *deriv=NULL,const double Jzcrit=0) const
     {
         *value = 0;
         double val;
@@ -33,7 +33,7 @@ public:
         if(deriv)
             deriv->dbyJr = deriv->dbyJz = deriv->dbyJphi = 0;
         for(unsigned int c=0; c<components.size(); c++) {
-            components[c]->evalDeriv(J, &val, deriv ? &der : NULL);
+            components[c]->evalDeriv(J, &val, deriv ? &der : NULL,Jzcrit);
             *value += val;
             if(deriv) {
                 deriv->dbyJr   += der.dbyJr;
@@ -49,7 +49,14 @@ public:
         for each input point; similar storage scheme for derivatives if they are requested.
     */
     virtual void evalMany(const size_t npoints, const actions::Actions J[], bool separate,
-        /*output*/ double values[], DerivByActions derivs[]=NULL) const;
+        /*output*/ double values[], DerivByActions derivs[]=NULL, const double Jzcrit[]=NULL) const;
+    
+    bool needPolInt() const{
+        bool needpI=false;
+        for(unsigned int c=0; c<components.size(); c++)needpI|=components[c]->needPolInt();
+        return needpI;
+        
+    }
 
 private:
     std::vector<PtrDistributionFunction> components;

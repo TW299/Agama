@@ -4,6 +4,7 @@
 #include "potential_composite.h"
 #include "potential_multipole.h"
 #include "potential_cylspline.h"
+#include "potential_interpolators.h"
 #include <stdexcept>
 #include <cassert>
 #include <cmath>
@@ -77,14 +78,24 @@ static void updateActionFinder(SelfConsistentModel& model)
         std::cout << "done" << std::endl;
 }
 
+static void updateJzcrit(SelfConsistentModel& model){
+    bool needPI=false;
+    for(unsigned int i=0; i<model.components.size(); i++)needPI|=model.components[i]->getDF()->needPolInt();
+    if(needPI)model.polint=potential::PtrPolarInterpolator(new potential::PolarInterpolator(*model.totalPotential));
+    else model.polint=potential::PtrPolarInterpolator(new potential::PolarInterpolator());
+}
+
 void doIteration(SelfConsistentModel& model)
 {
     // need to initialize the potential and the action finder before the first iteration
     if(!model.totalPotential)
         updateTotalPotential(model);
-    else
+    else{
         if(!model.actionFinder)
             updateActionFinder(model);
+        if(!model.polint)
+            updateJzcrit(model);
+    }
 
     for(unsigned int index=0; index<model.components.size(); index++) {
         // update the density of each component (this may be a no-op if the component is 'dead',
@@ -167,6 +178,8 @@ void updateTotalPotential(SelfConsistentModel& model)
         std::cout << "done" << std::endl;
     // finally, create the action finder for the new potential
     updateActionFinder(model);
+
+    updateJzcrit(model);
 }
 
 }  // namespace

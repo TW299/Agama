@@ -22,6 +22,7 @@
 #include "galaxymodel_selfconsistent.h"
 #include "galaxymodel_velocitysampler.h"
 #include "df_factory.h"
+#include "df_disk.h"
 #include "potential_composite.h"
 #include "potential_factory.h"
 #include "potential_multipole.h"
@@ -64,7 +65,7 @@ struct NewDoublePowerLawParam{
         alpha(0.6), beta(NAN), Fin(NAN), Fout(NAN), rotFrac(0) {}
 };
 
-class NewDoublePowerLaw: public BaseDistributionFunction{
+class NewDoublePowerLawN: public BaseDistributionFunction{
     const NewDoublePowerLawParam par;  ///< parameters of DF
     const double zeta;              ///< auxiliary coefficient for the case of a central core
 public:
@@ -72,11 +73,11 @@ public:
         \param[in] params  are the parameters of DF
         \throws std::invalid_argument exception if parameters are nonsense
     */
-    NewDoublePowerLaw(const NewDoublePowerLawParam &params);
+    NewDoublePowerLawN(const NewDoublePowerLawParam &params);
 
     /** return value of DF for the given set of actions */
     virtual void evalDeriv(const actions::Actions &J, double *f,
-        df::DerivByActions *deriv=NULL) const;
+        df::DerivByActions *deriv=NULL,const double Jzcrit=0) const;
 };
 
 /// helper class used in the root-finder to determine the auxiliary coefficient zeta for a cored halo
@@ -112,7 +113,7 @@ class NewDoublePowerLawZetaFinder: public math::IFunctionNoDeriv{
         }
 };
 
-NewDoublePowerLaw::NewDoublePowerLaw(const NewDoublePowerLawParam &inparams) :
+NewDoublePowerLawN::NewDoublePowerLawN(const NewDoublePowerLawParam &inparams) :
     par(inparams),
     zeta(math::findRoot(NewDoublePowerLawZetaFinder(par), 0.0, 2.0, /*root-finder tolerance*/ SQRT_DBL_EPSILON))
 {
@@ -135,7 +136,7 @@ NewDoublePowerLaw::NewDoublePowerLaw(const NewDoublePowerLawParam &inparams) :
         throw std::invalid_argument("NewDoublePowerLaw: amplitude of odd-Jphi component must be between -1 and 1");
 }
 
-void NewDoublePowerLaw::evalDeriv(const actions::Actions &J, double *val, df::DerivByActions*) const
+void NewDoublePowerLawN::evalDeriv(const actions::Actions &J, double *val, df::DerivByActions*, const double) const
 {
     double modJphi=fabs(J.Jphi);
     double L=J.Jz+modJphi;
@@ -164,56 +165,6 @@ void NewDoublePowerLaw::evalDeriv(const actions::Actions &J, double *val, df::De
         *val *= 1 + par.rotFrac * tanh(J.Jphi / par.Jphi0);
 }
 
-struct NewExponentialParam{
-    double
-        norm,       ///< overall normalization factor with the dimension of mass (NOT the actual mass)
-        Jr0,        ///< scale action setting the radial velocity dispersion
-        Jz0,        ///< scale action setting the disk thickness and the vertical velocity dispersion
-        Jphi0,      ///< scale action setting the disk radius
-        pr,        ///< power of radial variation of sigR
-        pz,        ///< power of radial variation of sigz
-        addJden,    ///< additional contribution to the sum of actions that affects the density profile
-        addJvel;    ///< same for the part that affects the velocity dispersion profiles
-    NewExponentialParam() :  ///< set default values for all fields
-        norm(NAN), Jr0(NAN), Jz0(NAN), Jphi0(NAN), pr(0.5), pz(0.5), addJden(0), addJvel(0) {}
-};
-
-class NewExponential: public df::BaseDistributionFunction{
-    const NewExponentialParam par;     ///< parameters of the DF
-public:
-    NewExponential(const NewExponentialParam& params);
-    virtual void evalDeriv(const actions::Actions &J, double *f,
-        df::DerivByActions *deriv=NULL) const;
-};
-
-NewExponential::NewExponential(const NewExponentialParam& params) :
-    par(params)
-{
-    if(!(par.norm>0))
-        throw std::invalid_argument("NewExponential: norm must be positive");
-    if(!(par.Jr0>0) || !(par.Jz0>0) || !(par.Jphi0>0))
-        throw std::invalid_argument("NewExponential: scale actions must be positive");
-    if(par.addJden<0 || par.addJden >= par.Jphi0)
-        throw std::invalid_argument("NewExponential: addJden must be in (0, Jphi0)");
-}
-
-void NewExponential::evalDeriv(const actions::Actions &J, double *val, df::DerivByActions*) const
-{
-    double Jp = J.Jphi<=0 ? 0 : J.Jphi;
-    if(Jp==0) {
-        *val = 0;
-        return;
-    }
-    double Jvel = Jp + par.addJvel;
-    double Jden = Jp + par.addJden;
-    double xr = pow(Jvel/par.Jphi0,par.pr)/par.Jr0;
-    double xz = pow(Jvel/par.Jphi0,par.pz)/par.Jz0;
-    double fr = xr * exp(-xr*J.Jr), fz = xz * exp(-xz*J.Jz);
-    double xp = Jden / par.Jphi0;
-    double fp = par.norm/par.Jphi0 * fabs(J.Jphi) / par.Jphi0 * exp(-xp);
-    *val = fr * fz * fp;
-}
-
 PtrDistributionFunction createNewDoublePowerLawDF(
     const utils::KeyValueMap& kvmap,
     const units::ExternalUnits& conv)
@@ -238,34 +189,10 @@ PtrDistributionFunction createNewDoublePowerLawDF(
     double mass = kvmap.getDouble("mass", NAN)* conv.massUnit;
     if(mass>0) {
         par.norm = 1.0;
-        par.norm = mass / NewDoublePowerLaw(par).totalMass();
+        par.norm = mass / NewDoublePowerLawN(par).totalMass();
     }
-    return PtrDistributionFunction(new NewDoublePowerLaw(par));
+    return PtrDistributionFunction(new NewDoublePowerLawN(par));
 }
-
-PtrDistributionFunction createNewExponentialDF(
-    const utils::KeyValueMap& kvmap,
-    const units::ExternalUnits& conv)
-{
-    if(!utils::stringsEqual(kvmap.getString("type"), "NewExponential"))
-        throw std::runtime_error("invalid DF type");
-    NewExponentialParam par;
-    par.norm   = kvmap.getDouble("norm",   par.norm)   * conv.massUnit;
-    par.Jr0    = kvmap.getDouble("Jr0")    * conv.lengthUnit * conv.velocityUnit;
-    par.Jz0    = kvmap.getDouble("Jz0")    * conv.lengthUnit * conv.velocityUnit;
-    par.Jphi0  = kvmap.getDouble("Jphi0")  * conv.lengthUnit * conv.velocityUnit;
-    par.pr     = kvmap.getDouble("pr");
-    par.pz     = kvmap.getDouble("pz");
-    par.addJden= kvmap.getDouble("addJden")* conv.lengthUnit * conv.velocityUnit;
-    par.addJvel= kvmap.getDouble("addJvel")* conv.lengthUnit * conv.velocityUnit;
-    double mass = kvmap.getDouble("mass", NAN)* conv.massUnit;
-    if(mass>0) {
-        par.norm = 1.0;
-        par.norm = mass / NewExponential(par).totalMass();
-    }
-    return PtrDistributionFunction(new NewExponential(par));
-}
-
 }  // namespace df
 
 
@@ -524,10 +451,10 @@ int main()
     // same for the stellar components (bulge, four disks, and stellar halo)
     std::vector<df::PtrDistributionFunction> dfStellarArray;
     dfStellarArray.push_back(df::createNewDoublePowerLawDF(iniDFBulge,      extUnits));
-    dfStellarArray.push_back(df::createNewExponentialDF   (iniDFyoungDisk,  extUnits));
-    dfStellarArray.push_back(df::createNewExponentialDF   (iniDFmiddleDisk, extUnits));
-    dfStellarArray.push_back(df::createNewExponentialDF   (iniDFoldDisk,    extUnits));
-    dfStellarArray.push_back(df::createNewExponentialDF   (iniDFhighADisk,  extUnits));
+    dfStellarArray.push_back(df::createDistributionFunction(iniDFyoungDisk,  NULL,NULL,extUnits));
+    dfStellarArray.push_back(df::createDistributionFunction   (iniDFmiddleDisk,NULL,NULL, extUnits));
+    dfStellarArray.push_back(df::createDistributionFunction   (iniDFoldDisk, NULL,NULL,    extUnits));
+    dfStellarArray.push_back(df::createDistributionFunction   (iniDFhighADisk,NULL,NULL,  extUnits));
     dfStellarArray.push_back(df::createNewDoublePowerLawDF(iniDFStellarHalo,extUnits));
     // composite DF of all stellar components
     df::PtrDistributionFunction dfStellar(new df::CompositeDF(dfStellarArray));

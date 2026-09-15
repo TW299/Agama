@@ -96,7 +96,7 @@ public:
         df(_df), pv(potential::Sphericalized<potential::BasePotential>(potential)), af(potential) {}
 
     virtual void evalDeriv(const actions::Actions &J, double *f,
-        DerivByActions *deriv=NULL) const
+        DerivByActions *deriv=NULL, const double Jzcrit=0) const
     {
         if(deriv) {
             // derivatives are obtained by a simple application of the chain rule
@@ -156,7 +156,7 @@ public:
 
     /** convert actions to E,L,Lz, then compute the DF and optionally its derivatives w.r.r. J */
     virtual void evalDeriv(const actions::Actions &J, double *value,
-        DerivByActions *deriv=NULL) const
+        DerivByActions *deriv=NULL, const double Jzcrit=0) const
     {
         double signJphi = J.Jphi >=0 ? 1 : -1;
         ClassicalIntegrals ints;

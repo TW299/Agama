@@ -220,6 +220,8 @@ public:
         size_t numvars = numVars(), numvalues = numValues();
         // jacobian of coordinate transformation at each point
         double* jac = static_cast<double*>(alloca(npoints * sizeof(double)));
+
+        double* Jzcrit  = static_cast<double*>(alloca(npoints * sizeof(double)));
         // values of selection function at each point
         double* sf  = static_cast<double*>(alloca(npoints * sizeof(double)));
         // values of distribution function (possibly several components) at each point
@@ -259,6 +261,7 @@ public:
                 // entirely, but the real problem is with the action finder, not here.
                 if(isFinite(acts.Jr + acts.Jz + acts.Jphi) && (acts.Jr!=0 || acts.Jz!=0)) {
                     act[nselected] = acts;
+                    Jzcrit[nselected]=model.polarInterpolator.getJzcrit(2*acts.Jr+acts.Jz);
                     nselected++;
                 } else  // otherwise this output point is ignored and will be overwritten next time
                     sf[p] = 0;
@@ -273,7 +276,7 @@ public:
 
         // 4. evaluate the DF for the entire selected subset of points at once
         try{
-            model.distrFunc.evalMany(nselected, act, /*separate*/ dflen!=1, /*output*/ df);
+            model.distrFunc.evalMany(nselected, act, /*separate*/ dflen!=1, /*output*/ df,NULL,Jzcrit);
         }
         catch(std::exception& e) {
             FILTERMSG(utils::VL_WARNING, "DFIntegrandNdim", std::string(e.what()));

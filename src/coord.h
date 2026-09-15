@@ -177,6 +177,22 @@ struct Axi{
     static const char* name() { return "Axisymmetric spheroidal"; }
 };
 
+/**Ellipsoidal coordinate system,
+   depening on alpha,beta,gamma to find coordinates (lambda,mu,nu) which are roots of:
+   x^2/(tau+alpha)+y^2/(tau+beta)+z^2/(tau+gamma)=1
+ */
+struct Ell{
+    const double alpha,beta,gamma;
+    explicit Ell(double _alpha=0,double _beta=0,double _gamma=0):alpha(_alpha),beta(_beta),gamma(_gamma){}
+    static const char* name(){return "Ellipsoidal";}
+};
+
+struct Els{
+    const double Deltaz2,Deltay2;
+    explicit Els(double _Deltaz2=0,double _Deltay2=0):Deltaz2(_Deltaz2),Deltay2(_Deltay2){}
+    static const char* name(){return "Ellipsoidal spheroid";}
+};
+
 ///@}
 /// \name   Primitive data types: position in different coordinate systems
 ///@{
@@ -268,6 +284,27 @@ template<> struct PosT<Axi>{
 };
 typedef struct PosT<Axi> PosAxi;
 
+template<> struct PosT<Ell>{
+    double lambda;
+    double mu;
+    double nu;
+    Ell ell;
+    PosT(double _lambda, double _mu, double _nu, Ell _ell=Ell(0,0,0)):
+        lambda(_lambda),mu(_mu),nu(_nu),ell(_ell){}
+};
+typedef struct PosT<Ell> PosEll;
+
+
+template<> struct PosT<Els>{
+    double rho;
+    double cotchi;
+    double phi;
+    Els els;
+    PosT(double _rho, double _cotchi, double _phi, Els _els=Els(0,0)):
+        rho(_rho),cotchi(_cotchi),phi(_phi),els(_els){}
+};
+typedef struct PosT<Els> PosEls;
+
 /** projected position (two Cartesian coordinates on the sky plane) */
 struct PosProj{
     double X, Y;
@@ -316,6 +353,48 @@ template<> struct VelT<Axi> {
     VelT(double _vrho, double _vnu, double _vphi) : vrho(_vrho), vnu(_vnu), vphi(_vphi) {}
 };
 typedef struct VelT<Axi> VelAxi;
+
+template<> struct VelT<Ell> {
+    double vlambda, vmu, vnu;
+    VelT(double _vlambda, double _vmu, double _vnu) : vlambda(_vlambda), vmu(_vmu), vnu(_vnu) {}
+};
+typedef struct VelT<Ell> VelEll;
+
+template<> struct VelT<Els> {
+    double rhodot, chidot, phidot;
+    VelT(double _rhodot, double _chidot, double _phidot) : rhodot(_rhodot), chidot(_chidot), phidot(_phidot) {}
+};
+typedef struct VelT<Els> VelEls;
+
+/// Momentum in arbitrary coordinates
+template<typename CoordT> struct MomT;
+
+/// momentum in cartesian coordinates
+template<> struct MomT<Car> {
+    double px, py, pz;   ///< components of momentum along three cartesian axes
+    MomT() {}
+    MomT(double _px, double _py, double _pz) : px(_px), py(_py), pz(_pz) {}
+};
+/// an alias to templated type specialization of momentum for cartesian coordinates
+typedef struct MomT<Car> MomCar;
+
+/// momentum in cylindrical coordinates
+template<> struct MomT<Cyl> {
+    double pR, pz, pphi;   ///< components of momentum
+    MomT() {}
+    MomT(double _pR, double _pz, double _pphi) : pR(_pR), pz(_pz), pphi(_pphi) {}
+};
+/// an alias to templated type specialization of momentum for cylindrical coordinates
+typedef struct MomT<Cyl> MomCyl;
+
+/// momentum in spherical coordinates
+template<> struct MomT<Sph> {
+    double pr, ptheta, pphi;   ///< components of momentum
+    MomT() {}
+    MomT(double _pr, double _ptheta, double _pphi) : pr(_pr), ptheta(_ptheta), pphi(_pphi) {}
+};
+/// an alias to templated type specialization of momentum for spherical coordinates
+typedef struct MomT<Sph> MomSph;
 
 ///@}
 /// \name   Primitive data types: second moments of velocity in different coordinate systems
@@ -446,6 +525,86 @@ template<> struct PosVelT<Axi>: public PosAxi, public VelAxi {
 };
 typedef struct PosVelT<Axi> PosVelAxi;
 
+template<> struct PosVelT<Ell>: public PosEll, public VelEll {
+    PosVelT(const PosEll& pos, const VelEll& vel) : PosEll(pos), VelEll(vel) {}
+
+    /// serialize into an array of 6 floating-point numbers
+    void unpack_to(double *out) const {
+        out[0]=lambda; out[1]=mu; out[2]=nu; out[3]=vlambda; out[4]=vmu; out[5]=vnu; }
+
+    /// convert velocities to momenta (canonically conjugate to positions)
+    void momenta(double& pl, double& pmu, double& pnu) const;
+};
+typedef struct PosVelT<Ell> PosVelEll;
+
+template<> struct PosVelT<Els>: public PosEls, public VelEls {
+    PosVelT(const PosEls& pos, const VelEls& vel) : PosEls(pos), VelEls(vel) {}
+
+    /// serialize into an array of 6 floating-point numbers
+    void unpack_to(double *out) const {
+        out[0]=rho; out[1]=cotchi; out[2]=phi; out[3]=rhodot; out[4]=chidot; out[5]=phidot; }
+
+    /// convert velocities to momenta (canonically conjugate to positions)
+    void momenta(double& pr, double& ppsi, double& pchi) const;
+};
+typedef struct PosVelT<Els> PosVelEls;
+
+/// combined position and momentum in arbitrary coordinates
+template<typename CoordT> struct PosMomT;
+
+/// combined position and momentum in cartesian coordinates
+template<> struct PosMomT<Car>: public PosCar, public MomCar {
+	PosMomT<Car>() {};
+    /// initialize from position and velocity
+	PosMomT<Car>(const PosCar& pos, const MomCar& mom) : PosCar(pos), MomCar(mom) {}
+    /// initialize from explicitly given numbers
+	PosMomT<Car>(double _x, double _y, double _z, double _px, double _py, double _pz) :
+	    PosCar(_x, _y, _z), MomCar(_px, _py, _pz) {}
+    /// initialize from an array of 6 floats (i.e., from a serialized array)
+	PosMomT<Car>(const double p[]) :
+	    PosCar(p[0], p[1], p[2]), MomCar(p[3], p[4], p[5]) {}
+    /// serialize into an array of 6 floating-point numbers
+	void unpack_to(double *out) const {
+		out[0]=x; out[1]=y; out[2]=z; out[3]=px; out[4]=py; out[5]=pz; }
+};
+/// an alias to templated type specialization of position and velocity for cartesian coordinates
+typedef struct PosMomT<Car> PosMomCar;
+
+/// combined position and momentum in cylindrical coordinates
+template<> struct PosMomT<Cyl>: public PosCyl, public MomCyl {
+	PosMomT() {};
+    /// initialize from position and momenta
+	PosMomT(const PosCyl& pos, const MomCyl& mom) : PosCyl(pos), MomCyl(mom) {}
+    /// initialize from explicitly given numbers
+	PosMomT(double _R, double _z, double _phi, double _pR, double _pz, double _pphi) :
+	    PosCyl(_R, _z, _phi), MomCyl(_pR, _pz, _pphi) {};
+    /// initialize from an array of 6 floats (i.e., from a serialized array)
+	PosMomT(const double p[]) :
+	    PosCyl(p[0], p[1], p[2]), MomCyl(p[3], p[4], p[5]) {};
+    /// serialize into an array of 6 floating-point numbers
+	void unpack_to(double *out) const {
+		out[0]=R; out[1]=z; out[2]=phi; out[3]=pR; out[4]=pz; out[5]=pphi; }
+};
+typedef struct PosMomT<Cyl> PosMomCyl;
+
+/// combined position and momentum in spherical coordinates
+template<> struct PosMomT<Sph>: public PosSph, public MomSph {
+	PosMomT<Sph>() {};
+    /// initialize from position and momenta
+	PosMomT<Sph>(const PosSph& pos, const MomSph& mom) : PosSph(pos), MomSph(mom) {}
+    /// initialize from explicitly given numbers
+	PosMomT<Sph>(double _r, double _theta, double _phi, double _pr, double _ptheta, double _pphi) :
+	    PosSph(_r, _theta, _phi), MomSph(_pr, _ptheta, _pphi) {};
+    /// initialize from an array of 6 floats (i.e., from a serialized array)
+	PosMomT<Sph>(const double p[]) :
+	    PosSph(p[0], p[1], p[2]), MomSph(p[3], p[4], p[5]) {};
+    /// serialize into an array of 6 floating-point numbers
+	void unpack_to(double *out) const {
+		out[0]=r; out[1]=theta; out[2]=phi; out[3]=pr; out[4]=ptheta; out[5]=pphi; }
+};
+typedef struct PosMomT<Sph> PosMomSph;
+
+
 ///@}
 /// \name   Primitive data types: gradient of a scalar function in different coordinate systems
 ///@{
@@ -484,6 +643,16 @@ template<> struct GradT<Axi>{
 };
 typedef struct GradT<Axi> GradAxi;
 
+template<> struct GradT<Ell>{
+    double dlambda, dmu, dnu;
+};
+typedef struct GradT<Ell> GradEll;
+
+template<> struct GradT<Els>{
+    double drho, dchi, dphi;
+};
+typedef struct GradT<Els> GradEls;
+
 ///@}
 /// \name   Primitive data types: hessian of a scalar function in different coordinate systems
 ///@{
@@ -520,6 +689,16 @@ template<> struct HessT<Axi>{
     double drho2, dnu2, dphi2, drhodnu, drhodphi, dnudphi;
 };
 typedef struct HessT<Axi> HessAxi;
+
+template<> struct HessT<Ell>{
+    double dlambda2, dmu2, dnu2, dlambdadmu, dlambdadnu, dmudnu;
+};
+typedef struct HessT<Ell> HessEll;
+
+template<> struct HessT<Els>{
+    double drho2, dchi2, dphi2, drhodchi, drhodphi, dchidphi;
+};
+typedef struct HessT<Els> HessEls;
 
 ///@}
 /// \name   Abstract interface classes for scalar functions
@@ -581,6 +760,18 @@ template<> struct PosDerivT<Cyl, Axi> {
 template<> struct PosDerivT<Axi, Cyl> {
     double dRdrho, dRdnu, dzdrho, dzdnu;
 };
+template<> struct PosDerivT<Car, Ell> {
+    double dlambdadx, dlambdady,dlambdadz,dmudx,dmudy,dmudz,dnudx,dnudy,dnudz;
+};
+template<> struct PosDerivT<Ell, Car> {
+    double dxdlambda,dydlambda,dzdlambda,dxdmu,dydmu,dzdmu,dxdnu,dydnu,dzdnu;
+};
+template<> struct PosDerivT<Car, Els> {
+    double drhodx, drhody,drhodz,dchidx,dchidy,dchidz,dphidx,dphidy,dphidz;
+};
+template<> struct PosDerivT<Els, Car> {
+    double dxdrho,dydrho,dzdrho,dxdchi,dydchi,dzdchi,dxdphi,dydphi,dzdphi;
+};
 
 /** second derivatives of coordinate transformation from source to destination
     coordinate systems (srcCS=>destCS): d^2(dest_coord)/d(source_coord1)d(source_coord2) */
@@ -620,6 +811,26 @@ template<> struct PosDeriv2T<Cyl, Axi>{
 };
 template<> struct PosDeriv2T<Axi, Cyl>{
     double d2Rdrho2, d2Rdrhodnu, d2Rdnu2, d2zdrho2, d2zdrhodnu, d2zdnu2;
+};
+template<> struct PosDeriv2T<Car, Ell>{
+    double d2lambdadx2,d2lambdadxdy,d2lambdadxdz,d2lambdady2,d2lambdadydz,d2lambdadz2,
+        d2mudx2,d2mudxdy,d2mudxdz,d2mudy2,d2mudydz,d2mudz2,
+        d2nudx2,d2nudxdy,d2nudxdz,d2nudy2,d2nudydz,d2nudz2;
+};
+template<> struct PosDeriv2T<Ell, Car>{
+    double d2xdlambda2,d2xdlambdadmu,d2xdlambdadnu,d2xdmu2,d2xdmudnu,d2xdnu2,
+        d2ydlambda2,d2ydlambdadmu,d2ydlambdadnu,d2ydmu2,d2ydmudnu,d2ydnu2,
+        d2zdlambda2,d2zdlambdadmu,d2zdlambdadnu,d2zdmu2,d2zdmudnu,d2zdnu2;
+};
+template<> struct PosDeriv2T<Car, Els>{
+    double d2rhodx2,d2rhodxdy,d2rhodxdz,d2rhody2,d2rhodydz,d2rhodz2,
+        d2phidx2,d2phidxdy,d2phidxdz,d2phidy2,d2phidydz,d2phidz2,
+        d2chidx2,d2chidxdy,d2chidxdz,d2chidy2,d2chidydz,d2chidz2;
+};
+template<> struct PosDeriv2T<Els, Car>{
+    double d2xdrho2,d2xdrhodphi,d2xdrhodchi,d2xdphi2,d2xdchidphi,d2xdchi2,
+        d2ydrho2,d2ydrhodphi,d2ydrhodchi,d2ydphi2,d2ydchidphi,d2ydchi2,
+        d2zdrho2,d2zdrhodphi,d2zdrhodchi,d2zdphi2,d2zdchidphi,d2zdchi2;
 };
 
 ///@}
@@ -792,6 +1003,48 @@ template<> inline PosVelCar toPosVel<Car,Car>(const PosVelCar& p, const Car) { r
 template<> inline PosVelCyl toPosVel<Cyl,Cyl>(const PosVelCyl& p, const Cyl) { return p; }
 template<> inline PosVelSph toPosVel<Sph,Sph>(const PosVelSph& p, const Sph) { return p; }
 
+template<typename srcCS, typename destCS>
+PosMomT<destCS> toPosMom(const PosMomT<srcCS>& from);
+
+/** templated conversion functions for coordinates and velocities
+    with names reflecting the target coordinate system. */
+template<typename srcCS>
+inline PosMomCar toPosMomCar(const PosMomT<srcCS>& from) { return toPosMom<srcCS, Car>(from); }
+template<typename srcCS>
+inline PosMomCyl toPosMomCyl(const PosMomT<srcCS>& from) { return toPosMom<srcCS, Cyl>(from); }
+template<typename srcCS>
+inline PosMomSph toPosMomSph(const PosMomT<srcCS>& from) { return toPosMom<srcCS, Sph>(from); }
+
+/** templated conversion taking the parameters of coordinate system into account */
+template<typename srcCS, typename destCS>
+PosMomT<destCS> toPosMom(const PosMomT<srcCS>& from, const destCS& coordsys);
+
+/** universal templated conversion function between PosVel and PosMom types
+    template parameters srcCS and destCS may be any of the coordinate system names */
+template<typename srcCS, typename destCS>
+PosMomT<destCS> toPosMom(const PosVelT<srcCS>& from);
+
+/** templated conversion functions for coordinates and velocities
+    with names reflecting the target coordinate system. */
+template<typename srcCS>
+inline PosMomCar toPosMomCar(const PosVelT<srcCS>& from) { return toPosMom<srcCS, Car>(from); }
+template<typename srcCS>
+inline PosMomCyl toPosMomCyl(const PosVelT<srcCS>& from) { return toPosMom<srcCS, Cyl>(from); }
+template<typename srcCS>
+inline PosMomSph toPosMomSph(const PosVelT<srcCS>& from) { return toPosMom<srcCS, Sph>(from); }
+
+
+/** more templated conversion taking the parameters of coordinate
+ ** system into account and involving both Vel and Mom*/
+template<typename srcCS, typename destCS>
+PosMomT<destCS> toPosMom(const PosVelT<srcCS>& from, const destCS& coordsys);
+
+template<typename srcCS, typename destCS>
+PosVelT<destCS> toPosVel(const PosMomT<srcCS>& from);
+template<typename srcCS>
+inline PosVelCyl toPosVelCyl(const PosMomT<srcCS>& from) {
+	return toPosVel<srcCS, Cyl>(from); }
+
 ///@}
 /// \name   Routines for conversion between position in different coordinate systems with derivatives
 ///@{
@@ -921,6 +1174,8 @@ void evalAndConvertSph(const math::IFunction& F,
 
 /// compute the total angular momentum for a point in the given coordinate system CoordT
 template<typename CoordT> double Ltotal(const PosVelT<CoordT> &p);
+
+template<typename CoordT> double Ltotal(const PosMomT<CoordT> &p);
 
 /// compute the z-component of angular momentum for a point in the given coordinate system CoordT
 template<typename CoordT> double Lz(const PosVelT<CoordT> &p);

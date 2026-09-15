@@ -85,7 +85,7 @@ public:
 
     /** compute the value of DF for the given set of actions, and optionally its derivatives */
     virtual void evalDeriv(const actions::Actions &J,
-        /*output*/ double *value, DerivByActions *deriv=NULL) const;
+        /*output*/ double *value, DerivByActions *deriv=NULL, const double Jzcrit=0) const;
 };
 
 
@@ -106,6 +106,39 @@ double
 ExponentialParam() :  ///< set default values for all fields
     norm(NAN), Jr0(NAN), Jz0(NAN), Jphi0(NAN), addJden(0), addJvel(0), coefJr(1.0), coefJz(0.25),
     qJr(0), qJz(0), qJphi(0) {}
+};
+
+struct NewExponentialParam{
+    double
+        norm,       ///< overall normalization factor with the dimension of mass (NOT the actual mass)
+        Jr0,        ///< scale action setting the radial velocity dispersion
+        Jz0,        ///< scale action setting the disk thickness and the vertical velocity dispersion
+        Jphi0,      ///< scale action setting the disk radius
+        pr,        ///< power of radial variation of sigR
+        pz,        ///< power of radial variation of sigz
+        addJden,    ///< additional contribution to the sum of actions that affects the density profile
+        addJvel;    ///< same for the part that affects the velocity dispersion profiles
+    NewExponentialParam() :  ///< set default values for all fields
+        norm(NAN), Jr0(NAN), Jz0(NAN), Jphi0(NAN), pr(0.5), pz(0.5), addJden(0), addJvel(0) {}
+};
+
+struct taperExpParam{
+    double
+        norm,       ///< overall normalization factor with the dimension of mass (NOT the actual mass)
+        Jr0,        ///< scale action setting the radial velocity dispersion
+        Jz0,        ///< scale action setting the disk thickness and the vertical velocity dispersion
+        Jphi0,      ///< scale action setting the disk radius
+        Jtrans,
+        Jtaper,
+        Jcut,
+        Delta,
+        pr,        ///< power of radial variation of sigR
+        pz,        ///< power of radial variation of sigz
+        addJden,    ///< additional contribution to the sum of actions that affects the density profile
+        addJvel;    ///< same for the part that affects the velocity dispersion profiles
+    taperExpParam() :  ///< set default values for all fields
+        norm(NAN), Jr0(NAN), Jz0(NAN), Jphi0(NAN), Jtrans(-1),Jtaper(0),Jcut(NAN),
+        Delta(-1), pr(0.5), pz(0.5), addJden(0), addJvel(0) {}
 };
 
 /** Another type of disk distribution function, which resembles QuasiIsothermal and produces
@@ -132,7 +165,23 @@ class Exponential: public df::BaseDistributionFunction{
 public:
     Exponential(const ExponentialParam& params);
     virtual void evalDeriv(const actions::Actions &J,
-        /*output*/ double *value, DerivByActions *deriv=NULL) const;
+        /*output*/ double *value, DerivByActions *deriv=NULL, const double Jzcrit=0) const;
+};
+
+class NewExponential: public df::BaseDistributionFunction{
+    const NewExponentialParam par;     ///< parameters of the DF
+public:
+    NewExponential(const NewExponentialParam& params);
+    virtual void evalDeriv(const actions::Actions &J, double *f,
+        df::DerivByActions *deriv=NULL,const double Jzcrit=0) const;
+};
+
+class taperExp: public df::BaseDistributionFunction{
+    const taperExpParam par;     ///< parameters of the DF
+public:
+    taperExp(const taperExpParam& params);
+    virtual void evalDeriv(const actions::Actions &J, double *f,
+        df::DerivByActions *deriv=NULL,const double Jzcrit=0) const;
 };
 
 ///@}

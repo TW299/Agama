@@ -45,13 +45,13 @@ public:
         \param[out] der (optional) - if not NULL, will store the DF derivatives w.r.t. actions.
     */
     virtual void evalDeriv(const actions::Actions &J,
-        /*output*/ double* value, DerivByActions *der=NULL) const=0;
+        /*output*/ double* value, DerivByActions *der=NULL, const double Jzcrit=0) const=0;
 
     /** Shortcut for getting the value of distribution function for the given set of actions J:
         in case than numValues>1, return a single value - the sum of all components */
-    double value(const actions::Actions &J) const {
+    double value(const actions::Actions &J, const double Jzcrit=0) const {
         double result;
-        evalDeriv(J, &result);
+        evalDeriv(J, &result, NULL, Jzcrit);
         return result;
     }
 
@@ -71,13 +71,15 @@ public:
         or npoints * numValues if separate=true).
     */
     virtual void evalMany(const size_t npoints, const actions::Actions J[],
-        bool /*separate*/, double values[], DerivByActions derivs[]=NULL) const
+        bool /*separate*/, double values[], DerivByActions derivs[]=NULL, const double Jzcrit[]=NULL) const
     {
         // default implementation for a single-component DF does not make a distinction between
         // separate or combined evaluation, and just loops over input points one by one
         for(size_t p=0; p<npoints; p++)
-            evalDeriv(J[p], values+p, derivs? derivs+p : NULL);
+            evalDeriv(J[p], values+p, derivs? derivs+p : NULL,Jzcrit?Jzcrit[p]:0);
     }
+
+    bool needPolInt() const{return false;}
 };
 
 

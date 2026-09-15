@@ -1,5 +1,6 @@
 #include "df_disk.h"
 #include "math_specfunc.h"
+#include "math_core.h"
 #include <cmath>
 #include <stdexcept>
 
@@ -30,7 +31,7 @@ QuasiIsothermal::QuasiIsothermal(const QuasiIsothermalParam &params, const poten
 }
 
 void QuasiIsothermal::evalDeriv(const actions::Actions &J,
-    double *value, DerivByActions *deriv) const
+    double *value, DerivByActions *deriv, const double Jzcrit) const
 {
     // weighted sum of actions
     double coefJphi = J.Jphi >= 0 ? 1 : -1,
@@ -104,7 +105,7 @@ Exponential::Exponential(const ExponentialParam& params) :
 }
 
 void Exponential::evalDeriv(const actions::Actions &J,
-    double *value, DerivByActions *deriv) const
+    double *value, DerivByActions *deriv, const double Jzcrit) const
 {
     // weighted sum of actions
     double coefJphi = J.Jphi >= 0 ? 1 : -1,
@@ -132,6 +133,84 @@ void Exponential::evalDeriv(const actions::Actions &J,
         if(negJphi)
             deriv->dbyJphi += *value * Jvel / pow_2(par.Jr0) / (1 + par.qJr * argJr);
     }
+}
+
+NewExponential::NewExponential(const NewExponentialParam& params) :
+    par(params)
+{
+    if(!(par.norm>0))
+        throw std::invalid_argument("NewExponential: norm must be positive");
+    if(!(par.Jr0>0) || !(par.Jz0>0) || !(par.Jphi0>0))
+        throw std::invalid_argument("NewExponential: scale actions must be positive");
+    if(par.addJden<0 || par.addJden >= par.Jphi0)
+        throw std::invalid_argument("NewExponential: addJden must be in (0, Jphi0)");
+}
+
+void NewExponential::evalDeriv(const actions::Actions &J, double *val, df::DerivByActions* dfdJ,const double Jzcrit) const
+{
+    double Jp = J.Jphi<=0 ? 0 : J.Jphi;
+    if(Jp==0) {
+        *val = 0;
+        return;
+    }
+    double Jvel = Jp + par.addJvel;
+    double Jden = Jp + par.addJden;
+    double xr = pow(Jvel/par.Jphi0,par.pr)/par.Jr0;
+    double xz = pow(Jvel/par.Jphi0,par.pz)/par.Jz0;
+    double expr=exp(-xr*J.Jr),expz=exp(-xz*J.Jz);
+    double fr = xr * expr, fz = xz * expz;
+    double xp = Jden / par.Jphi0;
+
+    double fp0 = par.norm/par.Jphi0 / par.Jphi0 * exp(-xp);
+    double V0=expr*expz*fp0;
+    *val = V0*xr*xz*abs(J.Jphi);
+    if(dfdJ){
+        double dxrdJp=(Jvel!=0)?par.pr*xr/Jvel:0;
+        double dxzdJp=(Jvel!=0)?par.pz*xz/Jvel:0;
+        double dfdJp=V0*abs(J.Jphi)*(xz*(1-xr*J.Jr)*dxrdJp+xr*(1-xz*J.Jz)*dxzdJp-xr*xz/par.Jphi0);
+        dfdJ->dbyJr=-V0*pow_2(xr)*xz*abs(J.Jphi);
+        dfdJ->dbyJz=-V0*xr*pow_2(xz)*abs(J.Jphi);
+        dfdJ->dbyJphi=math::sign(J.Jphi)*xr*xz*V0;
+        if(J.Jphi>0)dfdJ->dbyJphi+=dfdJp;
+    }
+}  
+
+taperExp::taperExp(const taperExpParam &param):par(param){
+    if(!(par.norm>0))
+        throw std::invalid_argument("taperExp: norm must be positive");
+    if(!(par.Jr0>0) || !(par.Jz0>0) || !(par.Jphi0>0))
+        throw std::invalid_argument("taperExp: scale actions must be positive");
+    if(par.addJden<0)
+        throw std::invalid_argument("taperExp: addJden must be in positive");
+}
+
+void taperExp::evalDeriv(const actions::Actions &J, double *value, df::DerivByActions *dfdJ,const double Jzcrit) const{
+    if(J.Jphi<0){
+        *value=0;
+        if(dfdJ){
+            dfdJ->dbyJr=dfdJ->dbyJz=dfdJ->dbyJphi=0;
+        }
+        return;
+    }
+    double Jt=J.Jr+J.Jz+abs(J.Jphi);
+    double Jval=Jt+par.addJvel;
+    double Jden=Jt+par.addJden;
+    double xr=pow(Jval/par.Jphi0,par.pr)/par.Jr0;
+    double xz=pow(Jval/par.Jphi0,par.pz)/par.Jz0;
+    double expr=exp(-xr*J.Jr),expz=exp(-xz*J.Jz);
+    double fr = xr * expr, fz = xz * expz;
+    double xp=Jden/par.Jphi0;
+    double fp = par.norm/par.Jphi0*Jden/ par.Jphi0 * exp(-xp);
+    *value=fr*fz*fp;
+    if(par.Jtrans>0){
+        double Ep=exp((J.Jphi-par.Jtaper)/par.Jtrans);
+        *value*=1/(1+1/pow_2(Ep));
+    }
+    if(par.Delta>0){
+        double Ep=exp(-(J.Jphi-par.Jcut)/par.Delta);
+        *value*=1/(1+1/pow_2(Ep));
+    }
+    //need to do derivatives
 }
 
 }  // namespace df

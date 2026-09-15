@@ -27,10 +27,11 @@ double
     coefJzOut, ///< contribution of vertical action to g(J), controlling anisotropy above J_0 (g_z)
     rotFrac,   ///< relative amplitude of the odd-Jphi component (-1 to 1, 0 means no rotation)
     Jphi0,     ///< controls the steepness of rotation and the size of non-rotating core
-    Jcore;     ///< central core size for a Cole&Binney-type modified double-power-law halo
+    Jcore,     ///< central core size for a Cole&Binney-type modified double-power-law halo
+    epsilonJ;
 DoublePowerLawParam() :  ///< set default values for all fields (NAN means that it must be set manually)
     norm(NAN), J0(NAN), Jcutoff(INFINITY), slopeIn(NAN), slopeOut(NAN), steepness(1), cutoffStrength(2),
-    coefJrIn(1), coefJzIn(1), coefJrOut(1), coefJzOut(1), rotFrac(0), Jphi0(0), Jcore(0) {}
+    coefJrIn(1), coefJzIn(1), coefJrOut(1), coefJzOut(1), rotFrac(0), Jphi0(0), Jcore(0),epsilonJ(0) {}
 };
 
 /** General double power-law model.
@@ -66,7 +67,23 @@ public:
 
     /** compute the value of DF for the given set of actions, and optionally its derivatives */
     virtual void evalDeriv(const actions::Actions &J,
-        /*output*/ double *value, DerivByActions *deriv=NULL) const;
+        /*output*/ double *value, DerivByActions *deriv=NULL, const double Jzcrit=0) const;
+};
+
+class NewDoublePowerLaw: public BaseDistributionFunction{
+    const DoublePowerLawParam par;  ///< parameters of DF
+    const DoublePowerLaw df0;
+public:
+    /** Create an instance of double-power-law distribution function with given parameters
+        \param[in] params  are the parameters of DF
+        \throws std::invalid_argument exception if parameters are nonsense
+    */
+    NewDoublePowerLaw(const DoublePowerLawParam &params);
+
+    double wt(const actions::Actions &J, DerivByActions* dwdJ=NULL) const;
+    /** return value of DF for the given set of actions */
+    virtual void evalDeriv(const actions::Actions &J, double *f,
+        df::DerivByActions *deriv=NULL,const double Jzcrit=0) const;
 };
 
 ///@}

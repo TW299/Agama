@@ -105,6 +105,10 @@ double R_from_Lz(const BasePotential& potential, double Lz);
 */
 double R_max(const BasePotential& potential, double E);
 
+/** Compute z so that E=Phi(R,z) at some  radius R in an axisymmetric potential.
+ */
+double z_max(const BasePotential& potential, double E, double R=0);
+
 /** Compute epicycle frequencies for a circular orbit in the equatorial plane with radius R.
     \param[in]  potential is the instance of potential (axisymmetrized if necessary);
     \param[in]  R     is the cylindrical radius;

@@ -81,7 +81,7 @@ DoublePowerLaw::DoublePowerLaw(const DoublePowerLawParam &inparams) :
 }
 
 void DoublePowerLaw::evalDeriv(const actions::Actions &J,
-    double *value, DerivByActions *deriv) const
+    double *value, DerivByActions *deriv, const double Jzcrit) const
 {
     double
     signJphi    = J.Jphi>=0 ? 1 : -1,
@@ -123,4 +123,56 @@ void DoublePowerLaw::evalDeriv(const actions::Actions &J,
     }
 }
 
+NewDoublePowerLaw::NewDoublePowerLaw(const DoublePowerLawParam &inparams) :
+    par(inparams), df0(DoublePowerLaw(inparams)){}
+
+double NewDoublePowerLaw::wt(const actions::Actions &J, df::DerivByActions *dwdJ) const{
+    double E=(par.epsilonJ*(par.epsilonJ+J.Jr+J.Jz));
+    double F=1+pow_2(J.Jphi)/E;
+    if(dwdJ){
+        double dinvFdF=-1/pow_2(F);
+        dwdJ->dbyJr=dinvFdF*(-pow_2(J.Jphi/E))*par.epsilonJ;
+        dwdJ->dbyJz=dwdJ->dbyJr;
+        dwdJ->dbyJphi=dinvFdF*(2*J.Jphi)/E;
+
+    }
+    return par.epsilonJ==0?0:1/F;
+}
+
+void NewDoublePowerLaw::evalDeriv(const actions::Actions &J, double *val, df::DerivByActions* deriv,const double Jzcrit) const
+{
+    if(par.epsilonJ==0){
+        df0.evalDeriv(J,val,deriv,Jzcrit);
+        return;
+    }
+    int sgnJphi=math::sign(J.Jphi);
+    DerivByActions dwdJ;
+    double w=wt(J,deriv?&dwdJ:NULL);
+    double eps=0.2*par.epsilonJ;
+    actions::Actions J1;
+    if(J.Jz<Jzcrit){
+        J1=actions::Actions(J.Jr+.5*(sgnJphi*J.Jphi-eps),J.Jz,eps);
+    }
+    else{
+        J1=actions::Actions(J.Jr,J.Jz+(sgnJphi*J.Jphi-eps),eps);
+    }
+    double f1;
+    df0.evalDeriv(J,&f1,deriv);
+    if(w<1){
+        double f0; DerivByActions df0dJ;
+        df0.evalDeriv(J1,&f0,deriv?&df0dJ:NULL);
+        *val=w*(f0)+(1-w)*f1;
+        if(deriv){
+            deriv->dbyJr=(1-w)*(deriv->dbyJr)-dwdJ.dbyJr*(f1-f0)+deriv->dbyJr+w*df0dJ.dbyJr;
+            deriv->dbyJz=(1-w)*(deriv->dbyJz)+dwdJ.dbyJz*(f1-f0)+deriv->dbyJz+w*df0dJ.dbyJz;
+            deriv->dbyJphi=(1-w)*(deriv->dbyJphi)-dwdJ.dbyJphi*(f1-f0);
+            if(J.Jz<Jzcrit)deriv->dbyJphi+=w*df0dJ.dbyJr*0.5*sgnJphi;
+            else deriv->dbyJphi+=w*df0dJ.dbyJz*sgnJphi;
+        }
+
+    }else{
+        *val=f1;
+        return;
+    }
+}
 }  // namespace df

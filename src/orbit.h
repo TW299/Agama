@@ -314,4 +314,6 @@ inline Trajectory integrateTraj(
     return output;
 }
 
+void makeSoS(const coord::PosVelCyl point, const potential::BasePotential &potential,
+    std::vector<double> &R, std::vector<double> &vR, const int N, const double z0=0);
 }  // namespace

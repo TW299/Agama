@@ -9,6 +9,7 @@
 #include "df_base.h"
 #include "particles_base.h"
 #include "math_sample.h"
+#include "potential_interpolators.h"
 
 /// A complete galaxy model (potential, action finder and distribution function) and associated routines
 namespace galaxymodel{
@@ -74,6 +75,7 @@ public:
     const potential::BasePotential&     potential;  ///< gravitational potential
     const actions::BaseActionFinder&    actFinder;  ///< action finder for the given potential
     const df::BaseDistributionFunction& distrFunc;  ///< distribution function expressed in terms of actions
+    const potential::PolarInterpolator& polarInterpolator;
     const BaseSelectionFunction&        selFunc;    ///< selection function sf(x,v)
 
     /** Create an instance of the galaxy model from the four ingredients
@@ -82,8 +84,9 @@ public:
         const potential::BasePotential& pot,
         const actions::BaseActionFinder& af,
         const df::BaseDistributionFunction& df,
+        const potential::PolarInterpolator& pI=potential::PolarInterpolatorSph,
         const BaseSelectionFunction& sf = selectionFunctionTrivial) :
-    potential(pot), actFinder(af), distrFunc(df), selFunc(sf) {}
+    potential(pot), actFinder(af), distrFunc(df),polarInterpolator(pI), selFunc(sf) {}
 };
 
 

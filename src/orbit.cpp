@@ -1,5 +1,6 @@
 #include "orbit.h"
 #include "potential_base.h"
+#include "potential_utils.h"
 #include "utils.h"
 #include "math_core.h"
 #include <stdexcept>
@@ -9,6 +10,47 @@ namespace orbit{
 
 /// roundoff tolerance in the trajectory sampling routine
 static const double ROUNDOFF = 10*DBL_EPSILON;
+static const unsigned int MAX_NUM_STEPS_ODE = 20000;
+
+//accuracy in finding z=0 in SOS
+static const double ACCURACY_Zcoord = 1e-5;
+
+namespace{
+    class FindCrossingPointz0:public math::IFunction{
+    public:
+        FindCrossingPointz0(const math::BaseOdeStepper& _stepper, const double _z0=0) :
+		    stepper(_stepper), z0(_z0) {};
+        virtual void evalDeriv(const double time, double* val, double* der, double*) const{
+            if(val)*val=stepper.getSol(time,1)-z0;
+            if(der)*der=stepper.getSol(time,3);
+        }
+        virtual unsigned int numDerivs()const {return 1;}
+    private:
+        const math::BaseOdeStepper& stepper;
+        const double z0;
+    };
+    class OrbitIntegratorRzPlane:public math::IOdeSystem{
+    public:
+        OrbitIntegratorRzPlane(const potential::BasePotential &_potential, const double _Lz):potential(_potential),Lz2(_Lz*_Lz){}
+        virtual void eval(const double timeOffset, const double xv[],
+        /*output*/ double dxdt[], double* accFac) const{
+            coord::PosCyl pos(fabs(xv[0]),xv[1],0);
+            coord::GradCyl dPhi;
+            potential.eval(pos,NULL,&dPhi);
+            dxdt[0]=xv[2];
+            dxdt[1]=xv[3];
+            int signR=math::sign(xv[0]);
+            double aR=-dPhi.dR;
+            if(Lz2>0)aR+=Lz2/pow_3(pos.R);
+            dxdt[2]=aR*signR;
+            dxdt[3]=-dPhi.dz;
+        }
+        virtual unsigned int size() const { return 4; }
+    private:
+        const potential::BasePotential &potential;
+        const double Lz2;
+    };
+}
 
 //---- RuntimeTrajectory ----//
 
@@ -326,6 +368,41 @@ void OrbitIntegrator<coord::Sph>::eval(const double timeOffset, const double xv[
 template class OrbitIntegrator<coord::Car>;
 template class OrbitIntegrator<coord::Cyl>;
 template class OrbitIntegrator<coord::Sph>;
+
+void makeSoS(const coord::PosVelCyl point, const potential::BasePotential &potential,
+    std::vector<double> &R, std::vector<double> &vR,const int N, const double z0){
+    double E=potential::totalEnergy(potential,point);
+    if(E>0){
+        printf("Energy is positive so no surface of section\n");
+        return;
+    }
+    double Lz=point.vphi*point.R;
+    OrbitIntegratorRzPlane integr(potential,Lz);
+    math::OdeStepperDOP853 stepper(integr);
+    double vars0[4]={point.R,point.z,point.vR,point.vz};
+    double Tc=potential::T_circ(potential,E);
+    double dtmax=0.1*Tc;
+    stepper.init(vars0);
+    bool finished=false;
+    int numSteps=0;
+    double zlast=point.z;
+    R.clear();vR.clear();
+    while(!finished){
+        double dt=stepper.doStep(dtmax);
+        if(dt<=0||numSteps>MAX_NUM_STEPS_ODE){
+            return;
+        }
+        numSteps++;
+        double z=stepper.getSol(dt,1);
+        if((zlast-z0)*(z-z0)<=0&&stepper.getSol(dt,3)>0){
+            double tv=math::findRoot(FindCrossingPointz0(stepper,z0),0,dt,ACCURACY_Zcoord);
+            R.push_back(stepper.getSol(tv,0));
+            vR.push_back(stepper.getSol(tv,2));
+        }
+        zlast=z;
+        if(R.size()>=N)finished=true;
+    }
+}
 
 }  // namespace orbit
 

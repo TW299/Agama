@@ -297,6 +297,8 @@ public:
     /// action finder associated with the total potential (empty at the beginning)
     actions::PtrActionFinder actionFinder;
 
+    potential::PtrPolarInterpolator polint;
+
     /// whether to use the interpolated action finder (faster but less accurate)
     bool useActionInterpolation;
 

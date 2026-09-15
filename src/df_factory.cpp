@@ -23,7 +23,7 @@ CompositeDF::CompositeDF(const std::vector<PtrDistributionFunction> &_components
 
 void CompositeDF::evalMany(
     const size_t npoints, const actions::Actions J[], bool separate,
-    /*output*/ double values[], DerivByActions derivs[]) const
+    /*output*/ double values[], DerivByActions derivs[], const double Jzcrit[]) const
 {
     // the "separate" flag indicates whether to store values for each component separately
     // or sum them up; each component produces a single value for each input point, even if
@@ -33,7 +33,7 @@ void CompositeDF::evalMany(
     if(ncomp == 1) {
         // fast track: for a single DF component, it does not matter whether separate is true or false,
         // and we simply output a single value per input point
-        components[0]->evalMany(npoints, J, /*separate*/false, values, derivs);
+        components[0]->evalMany(npoints, J, /*separate*/false, values, derivs, Jzcrit);
         return;
     }
 
@@ -56,7 +56,7 @@ void CompositeDF::evalMany(
         }
     }
     for(unsigned int c=0; c<ncomp; c++) {
-        components[c]->evalMany(npoints, J, /*separate*/ false, /*output*/ compval, compder);
+        components[c]->evalMany(npoints, J, /*separate*/ false, /*output*/ compval, compder, Jzcrit);
         if(separate) {
             for(size_t p=0; p<npoints; p++)
                 values[p*ncomp+c] = compval[p];
@@ -132,6 +132,7 @@ DoublePowerLawParam parseDoublePowerLawParam(
     assignParam(par.coefJzOut, kvmap, keys, "coefJzOut");
     assignParam(par.rotFrac,   kvmap, keys, "rotFrac");
     assignParam(par.cutoffStrength, kvmap, keys, "cutoffStrength");
+    assignParam(par.epsilonJ, kvmap, keys, "epsilonJ", "", conv.lengthUnit*conv.velocityUnit);
     return par;
 }
 
@@ -178,6 +179,43 @@ ExponentialParam parseExponentialParam(
     return par;
 }
 
+NewExponentialParam parseNewExponentialParam(
+    const utils::KeyValueMap& kvmap,
+    const units::ExternalUnits& conv,
+    std::vector<std::string>& keys)
+{
+    NewExponentialParam par;
+    assignParam(par.norm,    kvmap, keys, "norm",    "", conv.massUnit);
+    assignParam(par.Jr0,     kvmap, keys, "Jr0",     "", conv.lengthUnit * conv.velocityUnit);
+    assignParam(par.Jz0,     kvmap, keys, "Jz0",     "", conv.lengthUnit * conv.velocityUnit);
+    assignParam(par.Jphi0,   kvmap, keys, "Jphi0",   "", conv.lengthUnit * conv.velocityUnit);
+    assignParam(par.pr,  kvmap, keys, "pr");
+    assignParam(par.pz,  kvmap, keys, "pz");
+    assignParam(par.addJden, kvmap, keys, "addJden", "", conv.lengthUnit * conv.velocityUnit);
+    assignParam(par.addJvel, kvmap, keys, "addJvel", "", conv.lengthUnit * conv.velocityUnit);
+    return par;
+}
+
+taperExpParam parsetaperExpParam(
+				  const utils::KeyValueMap& kvmap,
+				  const units::ExternalUnits& conv)
+{
+	taperExpParam par;
+	par.norm   = kvmap.getDouble("norm",	par.norm)   * conv.massUnit;
+	par.Jr0    = kvmap.getDouble("Jr0",	par.Jr0)    * conv.lengthUnit * conv.velocityUnit;
+	par.Jz0    = kvmap.getDouble("Jz0",	par.Jz0)    * conv.lengthUnit * conv.velocityUnit;
+	par.Jtaper = kvmap.getDouble("Jtaper",	par.Jtaper) * conv.lengthUnit * conv.velocityUnit;
+	par.Jtrans = kvmap.getDouble("Jtrans",	par.Jtrans) * conv.lengthUnit * conv.velocityUnit;
+	par.Jcut   = kvmap.getDouble("Jcut",	par.Jcut) * conv.lengthUnit * conv.velocityUnit;
+	par.Delta  = kvmap.getDouble("Delta",	par.Delta) * conv.lengthUnit * conv.velocityUnit;
+	par.Jphi0  = kvmap.getDouble("Jphi0",	par.Jphi0)  * conv.lengthUnit * conv.velocityUnit;
+	par.pr	   = kvmap.getDouble("pr",	par.pr);
+	par.pz	   = kvmap.getDouble("pz",	par.pz);
+	par.addJden= kvmap.getDouble("addJden",	par.addJden)* conv.lengthUnit * conv.velocityUnit;
+	par.addJvel= kvmap.getDouble("addJvel", par.addJvel)* conv.lengthUnit * conv.velocityUnit;
+	return par;
+}
+
 }  // namespace
 
 PtrDistributionFunction createDistributionFunction(
@@ -208,6 +246,18 @@ PtrDistributionFunction createDistributionFunction(
         }
         result = PtrDistributionFunction(new DoublePowerLaw(par));
     }
+    else if(utils::stringsEqual(type, "NewDoublePowerLaw")) {
+         if(potential != NULL || density != NULL)
+            throw std::invalid_argument(type+" DF does not need potential or density");
+        DoublePowerLawParam par = parseDoublePowerLawParam(kvmap, converter, keys);
+        if(massProvided) {
+            if(kvmap.contains("norm"))
+                throw std::runtime_error("Parameters 'mass' and 'norm' are mutually exclusive");
+            par.norm = 1.0;
+            par.norm = mass / NewDoublePowerLaw(par).totalMass();
+        }
+        result = PtrDistributionFunction(new NewDoublePowerLaw(par));
+    }
     else if(utils::stringsEqual(type, "Exponential")) {
         if(potential != NULL || density != NULL)
             throw std::invalid_argument(type+" DF does not need potential or density");
@@ -219,6 +269,30 @@ PtrDistributionFunction createDistributionFunction(
             par.norm = mass / Exponential(par).totalMass();
         }
         result = PtrDistributionFunction(new Exponential(par));
+    }
+    else if(utils::stringsEqual(type, "NewExponential")) {
+        if(potential != NULL || density != NULL)
+            throw std::invalid_argument(type+" DF does not need potential or density");
+        NewExponentialParam par = parseNewExponentialParam(kvmap, converter, keys);
+        if(massProvided) {
+            if(kvmap.contains("norm"))
+                throw std::runtime_error("Parameters 'mass' and 'norm' are mutually exclusive");
+            par.norm = 1.0;
+            par.norm = mass / NewExponential(par).totalMass();
+        }
+        result = PtrDistributionFunction(new NewExponential(par));
+    }
+    else if(utils::stringsEqual(type, "taperExp")) {
+        if(potential != NULL || density != NULL)
+            throw std::invalid_argument(type+" DF does not need potential or density");
+        taperExpParam par = parsetaperExpParam(kvmap, converter);
+        if(massProvided) {
+            if(kvmap.contains("norm"))
+                throw std::runtime_error("Parameters 'mass' and 'norm' are mutually exclusive");
+            par.norm = 1.0;
+            par.norm = mass / taperExp(par).totalMass();
+        }
+        result = PtrDistributionFunction(new taperExp(par));
     }
     else if(utils::stringsEqual(type, "QuasiIsothermal")) {
         if(density != NULL)

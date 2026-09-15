@@ -157,6 +157,7 @@ static PyTypeObject
     *PotentialTypePtr,
     *ActionFinderTypePtr,
     *ActionMapperTypePtr,
+    *PolarInterpolatorTypePtr,
     *DistributionFunctionTypePtr,
     *SelectionFunctionTypePtr,
     *TargetTypePtr,
@@ -4043,6 +4044,115 @@ static PyTypeObject ActionMapperType = {
     (initproc)ActionMapper_init
 };
 
+static const char* docstringPolarInterpolator =
+    "PolarInterpolator object is created for a given potential (provided as the first argument "
+    "to the constructor). This then returns the critical Jz between box and loop orbits.\n"
+    "The Jzcrit operator computed the critical Jz for some Jfast=2*Jr+Jz action\n";
+
+/// \cond INTERNAL_DOCS
+/// Python type corresponding to PolarInterpolator class
+typedef struct {
+    PyObject_HEAD
+    potential::PtrPolarInterpolator PolInterp;  // C++ object for action finder
+} PolarInterpolatorObject;
+/// \endcond
+
+/// destructor of PolarInterpolator class
+void PolarInterpolator_dealloc(PolarInterpolatorObject* self)
+{
+    FILTERMSG(utils::VL_DEBUG, "Agama", "Deleted an polar interpolator at " +
+        utils::toString(self->PolInterp.get()));
+    self->PolInterp.reset();
+    Py_TYPE(self)->tp_free(self);
+}
+
+/// create a Python PolarInterpolator object and initialize it
+/// with an existing instance of C++ polar interpolator class
+PyObject* createPolarInterpolatorObject(potential::PtrPolarInterpolator PolInterp)
+{
+    PolarInterpolatorObject* polint_obj = PyObject_New(PolarInterpolatorObject, ActionFinderTypePtr);
+    if(!polint_obj)
+        return NULL;
+    // same trickery as in 'createDensityObject()'
+    new (&(polint_obj->PolInterp)) potential::PtrPolarInterpolator;
+    polint_obj->PolInterp =PolInterp;
+    FILTERMSG(utils::VL_DEBUG, "Agama", "Created a Python wrapper for PolarInterpolator at "+
+        utils::toString(PolInterp.get()));
+    return (PyObject*)polint_obj;
+}
+
+/// constructor of PolarInterpolator class
+int PolarInterpolator_init(PolarInterpolatorObject* self, PyObject* args, PyObject* namedArgs)
+{
+    if(self->PolInterp) {
+        PyErr_SetString(PyExc_RuntimeError, "PolarInterpolator object cannot be reinitialized");
+        return -1;
+    }
+    static const char* keywords[] = {"potential", NULL};
+    PyObject* pot_obj=NULL;
+    if(!PyArg_ParseTupleAndKeywords(args, namedArgs, "O|O", const_cast<char**>(keywords),
+        &pot_obj))
+    {
+        return -1;
+    }
+    potential::PtrPotential pot = getPotential(pot_obj);
+    if(!pot) {
+        PyErr_SetString(PyExc_TypeError, "Argument must be a valid Potential object");
+        return -1;
+    }
+    try{
+        self->PolInterp = potential::PtrPolarInterpolator(new potential::PolarInterpolator(*pot));
+        FILTERMSG(utils::VL_DEBUG, "Agama", "Created polar interpolator at " +
+            utils::toString(self->PolInterp.get()));
+        return 0;
+    }
+    catch(std::exception& ex) {
+        raisePythonException(ex, "Error in PolarInterpolator initialization: ");
+        return -1;
+    }
+}
+
+//To compute Jzcrit from Jfast
+class FncGetJzcrit: public BatchFunction {
+    const potential::PolarInterpolator& polinterp;
+    double* outputBuffer;
+public:
+    FncGetJzcrit(PyObject* input, const potential::PolarInterpolator& _polinterp) :
+        BatchFunction(input, /*input length*/ 1),
+        polinterp(_polinterp)
+    {
+        outputObject = allocateOutput<1>(numPoints, &outputBuffer);
+    }
+    virtual void processPoint(npy_intp ip /*point index*/)
+    {
+        outputBuffer[ip] =polinterp.getJzcrit(inputBuffer[ip] * conv->lengthUnit * conv->velocityUnit)/(conv->lengthUnit*conv->velocityUnit);
+    }
+};
+
+PyObject* getJzcrit(PyObject* self, PyObject* args)
+{
+    return FncGetJzcrit(args, *((PolarInterpolatorObject*)self)->PolInterp).run(/*chunk*/64);
+}
+
+static PyMethodDef PolarInterpolator_methods[] = {
+    { "getJzcrit", (PyCFunction)getJzcrit, METH_VARARGS | METH_KEYWORDS,
+      "Compute Jzcrit at a given fast action "
+      "seperating box from loop orbits.\n"
+      "Arguments: a float or array of floats that contian the fast action Jfast=2*Jr+Jz\n"
+      "Returns: float or array of floats" },
+    { NULL }
+};
+
+static PyTypeObject PolarInterpolatorType = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "agama.PolarInterpolator",
+    sizeof(PolarInterpolatorObject), 0, (destructor)PolarInterpolator_dealloc, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0,
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE /*allow it to be subclassed*/,docstringPolarInterpolator,
+    0, 0, 0, 0, 0, 0, PolarInterpolator_methods, 0, 0, 0, 0, 0, 0, 0,
+    (initproc)PolarInterpolator_init
+};
 
 ///@}
 //  ----------------------------------
@@ -4116,26 +4226,34 @@ public:
     }
     // non-vectorized form
     virtual void evalDeriv(const actions::Actions &J,
-        double *val, df::DerivByActions *der=NULL) const
+        double *val, df::DerivByActions *der=NULL, const double Jzcrit=0) const
     {
-        evalMany(1, &J, /*separate*/ false, val, der);
+        evalMany(1, &J, /*separate*/ false, val, der, &Jzcrit);
     }
     // vectorized form is the one that actually does the work
     virtual void evalMany(const size_t npoints, const actions::Actions J[], bool,
-        double values[], df::DerivByActions *deriv=NULL) const
+        double values[], df::DerivByActions *deriv=NULL, const double Jzcrit[]=NULL) const
     {
         ALLOC(3*npoints, double, act)
-        for(size_t p=0; p<npoints; p++)
+        double Jzc[npoints];
+        for(size_t p=0; p<npoints; p++){
             unconvertActions(J[p], act + p*3);
+            if(Jzcrit)Jzc[p]=Jzcrit[p]/(conv->lengthUnit*conv->velocityUnit);
+            else Jzc[p]=0;
+        }
         double mult = conv->massUnit / pow_3(conv->velocityUnit * conv->lengthUnit);
         double mult_der = mult / (conv->velocityUnit * conv->lengthUnit);
         PyAcquireGIL lock;
         bool typeerror  = false;
         npy_intp dims[] = { (npy_intp)npoints, 3};
         PyObjectRef args(PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, act));
+        PyObjectRef kw(PyDict_New());
+        if(Jzcrit){
+            npy_intp dimsn[] = { (npy_intp)npoints};
+            PyDict_SetItemString(kw,"Jzcrit",PyArray_SimpleNewFromData(1,dimsn,NPY_DOUBLE,Jzc));
+        }
         PyObject *result = NULL, *result_der = NULL;
         if(deriv) {
-            PyObjectRef kw(PyDict_New());
             PyDict_SetItemString(kw, "der", Py_True);
             PyObjectRef tup(PyObject_Call(fnc,
                 PyObjectRef(Py_BuildValue("(O)", (PyObject*)args)),
@@ -4366,10 +4484,14 @@ class FncDistributionFunction: public BatchFunctionVectorized {
     const bool der;
     const df::BaseDistributionFunction& df;
     double* outputBuffer[2];
+    std::vector<double> Jzcrit;
 public:
-    FncDistributionFunction(PyObject* input, bool _der, const df::BaseDistributionFunction& _df) :
+    FncDistributionFunction(PyObject* input, PyObject* namedArgs, bool _der, const df::BaseDistributionFunction& _df) :
         BatchFunctionVectorized(input, /*input length*/ 3), der(_der), df(_df)
     {
+        NamedArgs nargs(namedArgs);
+        Jzcrit=nargs.popArray("Jzcrit",numPoints);
+        nargs.pop("der");
         outputObject = der?
             allocateOutput<1,3>(numPoints, outputBuffer) :
             allocateOutput<1>  (numPoints, outputBuffer);
@@ -4378,10 +4500,13 @@ public:
     {
         npy_intp npoints = indexEnd - indexStart;
         ALLOC(npoints, actions::Actions, act)
-        for(npy_intp i=0; i<npoints; i++)
+        double Jzc[npoints];
+        for(npy_intp i=0; i<npoints; i++){
             act[i] = convertActions(&inputBuffer[(i + indexStart) * 3]);
+            Jzc[i]=Jzcrit[(indexStart+i)%Jzcrit.size()]*conv->lengthUnit*conv->velocityUnit;
+        }
         df.evalMany(npoints, act, /*separate*/false, &outputBuffer[0][indexStart],
-            der ? (df::DerivByActions*)(&outputBuffer[1][indexStart]) : NULL);
+            der ? (df::DerivByActions*)(&outputBuffer[1][indexStart]) : NULL, &Jzc[0]);
         for(npy_intp indexPoint=indexStart; indexPoint<indexEnd; indexPoint++)
             outputBuffer[0][indexPoint] /=  // DF dimension: M L^-3 V^-3
                 conv->massUnit / pow_3(conv->velocityUnit * conv->lengthUnit);
@@ -4400,15 +4525,15 @@ PyObject* DistributionFunction_value(DistributionFunctionObject* self, PyObject*
         return NULL;
     }
     PyObject* der_obj = NULL;
-    if(namedArgs && (PyDict_Size(namedArgs) != 1 ||
-        ((der_obj = PyDict_GetItemString(namedArgs, "der")) == NULL)))
+    if(namedArgs && (PyDict_Size(namedArgs) > 2 ||
+        ((der_obj = PyDict_GetItemString(namedArgs, "der")) == NULL && PyDict_GetItemString(namedArgs, "Jzcrit") == NULL)))
     {
         PyErr_SetString(PyExc_RuntimeError,
-            "Distribution function must be called either without named arguments, or with der=True");
+            "Distribution function must be called either without named arguments, or with der=True or with Jzcrit argument");
         return NULL;
     }
     bool der = der_obj ? PyObject_IsTrue(der_obj) : false;
-    return FncDistributionFunction(args, der, *self->df).run(/*chunk*/1024);
+    return FncDistributionFunction(args, namedArgs, der, *self->df).run(/*chunk*/1024);
 }
 
 PyObject* DistributionFunction_totalMass(PyObject* self)
@@ -4740,6 +4865,7 @@ static const char* docstringGalaxyModel =
     "  df - a DistributionFunction object.\n"
     "  af (optional) - an ActionFinder object - must be constructed for the same potential; "
     "if not provided, then the action finder is created internally.\n"
+    "  PolInterp (optional) - a PolarInterpolator object constructed in the same potential;\n"
     "  sf (optional) - a SelectionFunction object or a user-defined callable function "
     "that takes a 2d Nx6 array of phase-space points (x,v in cartesian coordinates) as input, "
     "and returns a 1d array of N values between 0 and 1, which will be multiplied by the values "
@@ -4758,6 +4884,7 @@ typedef struct {
     PotentialObject* pot_obj;
     DistributionFunctionObject* df_obj;
     ActionFinderObject* af_obj;
+    PolarInterpolatorObject* polInterp_obj;
     PyObject* sf_obj;
 } GalaxyModelObject;
 /// \endcond
@@ -4767,6 +4894,7 @@ void GalaxyModel_dealloc(GalaxyModelObject* self)
     Py_XDECREF(self->pot_obj);
     Py_XDECREF(self->df_obj);
     Py_XDECREF(self->af_obj);
+    Py_XDECREF(self->polInterp_obj);
     Py_XDECREF(self->sf_obj);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -4795,9 +4923,9 @@ int GalaxyModel_init(GalaxyModelObject* self, PyObject* args, PyObject* namedArg
         return -1;
     }
     static const char* keywords[] = {"potential", "df", "af", "sf", NULL};
-    PyObject *pot_obj = NULL, *df_obj = NULL, *af_obj = NULL, *sf_obj = NULL;
+    PyObject *pot_obj = NULL, *df_obj = NULL, *af_obj = NULL, *polint_obj=NULL, *sf_obj = NULL;
     if(!PyArg_ParseTupleAndKeywords(args, namedArgs, "OO|OO", const_cast<char**>(keywords),
-        &pot_obj, &df_obj, &af_obj, &sf_obj))
+        &pot_obj, &df_obj, &af_obj,&polint_obj, &sf_obj))
     {
         return -1;
     }
@@ -4846,6 +4974,16 @@ int GalaxyModel_init(GalaxyModelObject* self, PyObject* args, PyObject* namedArg
         self->af_obj = (ActionFinderObject*)af_obj;
     }
 
+    if(polint_obj==NULL) {  // no polar interpolator provided - create one internally
+        self->polInterp_obj = (PolarInterpolatorObject*)PyObject_CallFunctionObjArgs(
+            (PyObject*)PolarInterpolatorTypePtr, /*args*/ pot_obj, /*end args*/ NULL);
+        if(!self->af_obj)
+            return -1;
+    } else {  // use an existing action finder and increase its refcount
+        Py_INCREF(polint_obj);
+        self->polInterp_obj = (PolarInterpolatorObject*)polint_obj;
+    }
+
     // sf_obj, if provided, must be a callable object OR an instance of a SelectionFunction class
     if(sf_obj) {
         if( !PyObject_TypeCheck(sf_obj, SelectionFunctionTypePtr) &&
@@ -4880,7 +5018,7 @@ PyObject* GalaxyModel_totalMass(GalaxyModelObject* self, PyObject* args, PyObjec
     bool separate = toBool(separate_flag, false);
     galaxymodel::PtrSelectionFunction selFunc(getSelectionFunction(self->sf_obj));
     const galaxymodel::GalaxyModel model(
-        *self->pot_obj->pot, *self->af_obj->af, *self->df_obj->df, *selFunc);
+        *self->pot_obj->pot, *self->af_obj->af, *self->df_obj->df,*self->polInterp_obj->PolInterp, *selFunc);
     int numVal = separate? model.distrFunc.numValues() : 1;
     std::vector<double> val(numVal);
     try{
@@ -4921,7 +5059,7 @@ PyObject* GalaxyModel_sample_posvel(GalaxyModelObject* self, PyObject* args, PyO
         {
             PyReleaseGIL unlock;
             points = galaxymodel::samplePosVel(galaxymodel::GalaxyModel(
-                *self->pot_obj->pot, *self->af_obj->af, *self->df_obj->df, *selfnc),
+                *self->pot_obj->pot, *self->af_obj->af, *self->df_obj->df, *self->polInterp_obj->PolInterp, *selfnc),
                 numPoints, method);
         }
 
@@ -4955,7 +5093,7 @@ public:
         BatchFunction(input, /*inputLength - two possible choices*/ 2, 3,
             /*custom error message*/ "Input should be a 2d/3d point or an array of points"),
         selFunc(getSelectionFunction(model_obj->sf_obj)),
-        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df, *selFunc),
+        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df,*model_obj->polInterp_obj->PolInterp, *selFunc),
         outputDens(NULL), outputVel(NULL), outputVel2(NULL)
     {
         NamedArgs nargs(namedArgs);
@@ -5076,7 +5214,7 @@ public:
             /*custom error message*/ "Input should be a point or an array of points "
             "with 8 numbers per point: X, Y, vX, vY, vZ, vX_error, vY_error, vZ_error"),
         selFunc(getSelectionFunction(model_obj->sf_obj)),
-        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df, *selFunc)
+        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df,*model_obj->polInterp_obj->PolInterp, *selFunc)
     {
         NamedArgs nargs(namedArgs);
         separate      = toBool(nargs.pop("separate"), false);
@@ -5148,7 +5286,7 @@ public:
         BatchFunction(input, /*inputLength - two possible choices*/ 2, 3,
             /*custom error message*/ "Input should be a 2d/3d point or an array of points"),
         selFunc(getSelectionFunction(model_obj->sf_obj)),
-        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df, *selFunc),
+        model(*model_obj->pot_obj->pot, *model_obj->af_obj->af, *model_obj->df_obj->df,*model_obj->polInterp_obj->PolInterp, *selFunc),
         sizegridv(SIZEGRIDV),
         splvX(NULL), splvY(NULL), splvZ(NULL), outputDensity(NULL)
     {
@@ -9229,6 +9367,12 @@ PyInit_agama(void)
     Py_INCREFx(&ActionMapperType);
     PyModule_AddObject(thismodule, "ActionMapper", (PyObject*)&ActionMapperType);
     ActionMapperTypePtr = &ActionMapperType;
+
+    PolarInterpolatorType.tp_new = PyType_GenericNew;
+    if(PyType_Ready(&PolarInterpolatorType) < 0) return NULL;
+    Py_INCREFx(&PolarInterpolatorType);
+    PyModule_AddObject(thismodule, "PolarInterpolator", (PyObject*)&PolarInterpolatorType);
+    PolarInterpolatorTypePtr = &PolarInterpolatorType;
 
     DistributionFunctionType.tp_new = PyType_GenericNew;
     if(PyType_Ready(&DistributionFunctionType) < 0) return NULL;

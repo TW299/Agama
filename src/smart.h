@@ -112,7 +112,7 @@ class BaseDensity;
 class BasePotential;
 class OblatePerfectEllipsoid;
 class PhaseVolume;
-
+class PolarInterpolator;
 /// shared pointer to a density object
 typedef shared_ptr<const BaseDensity>   PtrDensity;
 /// shared pointer to a potential object
@@ -121,6 +121,8 @@ typedef shared_ptr<const BasePotential> PtrPotential;
 typedef shared_ptr<const OblatePerfectEllipsoid> PtrOblatePerfectEllipsoid;
 /// shared pointer to a PhaseVolume object
 typedef shared_ptr<const PhaseVolume>   PtrPhaseVolume;
+
+typedef shared_ptr<const PolarInterpolator> PtrPolarInterpolator;
 
 }  // namespace potential
 

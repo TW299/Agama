@@ -270,6 +270,33 @@ public:
     virtual unsigned int numDerivs() const { return 1; }
 };
 
+class zmaxRootFinder: public math::IFunction {
+    const Axisymmetrized<BasePotential> pot;
+    const double E,R;
+public:
+    zmaxRootFinder(const BasePotential& _pot, double _E,double _R=0) : pot(_pot), E(_E),R(_R) {}
+    virtual void evalDeriv(const double logz, double* val=0, double* deriv=0, double* =0) const
+    {
+        double Phi, z = exp(logz);
+        coord::GradCyl grad;
+        pot.eval(coord::PosCyl(R, z, 0), &Phi, deriv? &grad : NULL);
+        if(val) {
+            *val = Phi - E;
+            if(!isFinite(*val)) {  // take special measures
+                if(E==-INFINITY)
+                    *val = Phi==E ? 0 : +1.0;
+                else if(Phi==-INFINITY)
+                    *val = -1.0;  // safely negative value
+                else if(R>=HUGE_NUMBER)
+                    *val = +1.0;
+            }
+        }
+        if(deriv)
+            *deriv = grad.dz * z;
+    }
+    virtual unsigned int numDerivs() const { return 1; }
+};
+
 /** helper class to find the root of  Phi(R) + 1/2 R dPhi/dR = E
     (i.e. the radius R of a circular orbit with the given energy E).
 */
@@ -634,6 +661,10 @@ double R_from_Lz(const BasePotential& potential, double L) {
 
 double R_max(const BasePotential& potential, double E) {
     return exp(math::findRoot(RmaxRootFinder(potential, E), math::ScalingInf(), ACCURACY_ROOT));
+}
+
+double z_max(const BasePotential& potential, double E, double R) {
+    return exp(math::findRoot(zmaxRootFinder(potential, E,R), math::ScalingInf(), ACCURACY_ROOT));
 }
 
 void epicycleFreqs(const BasePotential& potential, const double R,
