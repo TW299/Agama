@@ -243,16 +243,6 @@ void getCurve(const potential::OblatePerfectEllipsoid& pot,int np,
 }
 	
 int main(){
-    /*potential::PtrPotential potDiskthin=potential::createPotential(
-        utils::KeyValueMap("type=Disk,surfaceDensity=3512,scaleRadius=2.9,scaleHeight=0.3"));
-    potential::PtrPotential potDiskthick=potential::createPotential(
-        utils::KeyValueMap("type=Disk,surfaceDensity=901,scaleRadius=3,scaleHeight=0.9"));
-    potential::PtrPotential potbulge=potential::createPotential(
-        utils::KeyValueMap("type=spheroid,alpha=1,gamma=0,beta=1.8,scaleRadius=0.075,q=0.5,outerCutoffRadius=2.1,densityNorm=411164.7"));
-    potential::PtrPotential potHalo=potential::createPotential(utils::KeyValueMap("type=spheroid,alpha=1,gamma=1,beta=3, densityNorm=36.385,q=1,scaleRadius=20.2"));
-    std::vector<potential::PtrPotential> potvec={potbulge,potDiskthin,potDiskthick,potHalo};
-    //potential::PtrPotential pot(new potential::CompositeCyl(potvec));*/
-   //potential::OblatePerfectEllipsoid PEpot(1,1,0.6);
     potential::PtrOblatePerfectEllipsoid ptrPEpot(new potential::OblatePerfectEllipsoid(1,1,0.6));
 	potential::PtrPotential pot=potential::createPotential(utils::KeyValueMap("type=PerfectEllipsoid, q=0.6, scaleRadius=1, Mass=1"));
 	double tol=1e-6;

@@ -2,7 +2,7 @@
 #include "actions_isochrone.h"
 #include "actions_spherical.h"
 #include "actions_staeckel.h"
-#include "actions_torus.h"
+#include "actions_torusmapper.h"
 #include "potential_analytic.h"
 #include "potential_perfect_ellipsoid.h"
 
@@ -62,9 +62,9 @@ PtrActionMapper createActionMapper(const potential::PtrPotential& pot, double to
         return PtrActionMapper(new actions::ActionMapperSpherical(*pot));
 
     if(tol==tol)  // non-default value for tol
-        return PtrActionMapper(new actions::ActionMapperTorus(pot, tol));
+        return PtrActionMapper(new actions::ActionMapperTorus(*pot, tol));
     else
-        return PtrActionMapper(new actions::ActionMapperTorus(pot /*, default_value_for_tol */));
+        return PtrActionMapper(new actions::ActionMapperTorus(*pot /*, default_value_for_tol */));
 }
 
 }  // namespace actions

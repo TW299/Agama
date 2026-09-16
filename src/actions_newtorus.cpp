@@ -1855,5 +1855,4 @@ namespace actions {
 		return ActionAngles(J, trueA);
 	}
 
-
 }//namespace

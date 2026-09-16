@@ -36,7 +36,7 @@ SOURCES   = interface_c.cpp \
             actions_isochrone.cpp \
             actions_spherical.cpp \
             actions_staeckel.cpp \
-            actions_torus.cpp \
+	    actions_torusmapper.cpp\
             coord.cpp \
             df_base.cpp \
             df_disk.cpp \
@@ -75,19 +75,6 @@ SOURCES   = interface_c.cpp \
             raga_trajectory.cpp \
             utils.cpp \
             utils_config.cpp \
-
-# ancient Torus code
-TORUSSRC  = CHB.cc \
-            Fit.cc \
-            Fit2.cc \
-            GeneratingFunction.cc \
-            Orb.cc \
-            PJMNum.cc \
-            Point_ClosedOrbitCheby.cc \
-            Point_None.cc \
-            Torus.cc \
-            Toy_Isochrone.cc \
-            WD_Numerics.cc \
 
 # test and example programs
 TESTSRCS  = test_galaxymodel.cpp \

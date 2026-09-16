@@ -167,21 +167,6 @@ struct ProlSph{
     static const char* name() { return "Prolate spheroidal"; }
 };
 
-struct UVSph{
-	double Delta, Delta2;     ///< Delta^2 = gamma - alpha > 0
-	UVSph(double D=1) : Delta(D), Delta2(D*D) {
-		if(D<=0)
-			throw std::invalid_argument("Invalid D for UV Spheroidal coordinate system\n");
-		//Delta = D; Delta2 = D*D;
-	}
-	void set(double D){
-		Delta=D; Delta2=D*D;
-	}
-	static const char* name() { return "UV Prolate spheroidal"; }
-};
-
-UVSph interpUVSph(const double, const UVSph&, const UVSph&);
-
 /** Universal axisymmetric spheroidal coordinate system,
     depending on the squared focal distance Delta^2:
     prolate (>0), spherical (=0) or oblate (<0).
@@ -262,17 +247,6 @@ template<> struct PosT<ProlSph>{
         lambda(_lambda), nu(_nu), phi(_phi), coordsys(_coordsys) {}
 };
 typedef struct PosT<ProlSph> PosProlSph;
-
-template<> struct PosT<UVSph>{
-	double u;  ///< lies in the range [0:infinity)
-	double v;      ///< lies in the range [0,pi]; z=0 <-> v=pi/2
-	double phi;     ///< usual azimuthal angle
-	const UVSph& coordsys;  ///< a point means nothing without specifying its coordinate system
-	PosT<UVSph>(double _u, double _v, double _phi, const UVSph& _coordsys):
-	    u(_u), v(_v), phi(_phi), coordsys(_coordsys) {};
-	PosT<UVSph> (const UVSph& _coordsys) : coordsys(_coordsys) {};
-};
-typedef struct PosT<UVSph> PosUVSph;
 
 /** position in universal axisymmetric spheroidal coordinates.
     "rho" is the analogue of the spherical radius and equivalent to it in the spherical case (Delta=0).
@@ -426,14 +400,6 @@ typedef struct MomT<Sph> MomSph;
 
 /// an alias to templated type specialization of momentum for spherical coordinates
 typedef struct MomT<Sph> MomSph;
-
-/// momentum in UV prolate spheroidal coordinates, canonically conjugate to the position
-template<> struct MomT<UVSph> {
-	double pu, pv, pphi;
-	MomT<UVSph>() {};
-	MomT<UVSph>(double _pu, double _pv, double _pphi) : pu(_pu), pv(_pv), pphi(_pphi) {};
-};
-typedef struct MomT<UVSph> MomUVSph;
 
 ///@}
 /// \name   Primitive data types: second moments of velocity in different coordinate systems
@@ -643,28 +609,6 @@ template<> struct PosMomT<Sph>: public PosSph, public MomSph {
 };
 typedef struct PosMomT<Sph> PosMomSph;
 
-/// position and velocity in UV prolate spheroidal coordinates
-template<> struct PosVelT<UVSph>: public PosUVSph{
-	double udot, vdot, phidot;  ///< time derivatives of position variables
-	PosVelT<UVSph>(const UVSph& coordsys) : PosUVSph(coordsys) {};
-	PosVelT<UVSph>(const PosUVSph& pos, double _udot, double _vdot, double _phidot):
-	    PosUVSph(pos), udot(_udot), vdot(_vdot), phidot(_phidot) {};
-	void unpack_to(double *out) const {
-		out[0]=u; out[1]=v; out[2]=phi; out[3]=udot; out[4]=vdot; out[5]=phidot; }
-};
-typedef struct PosVelT<UVSph> PosVelUVSph;
-
-/// position and momentum in UV prolate spheroidal coordinates
-template<> struct PosMomT<UVSph>: public PosUVSph, public MomUVSph {
-	double udot, vdot, phidot;  ///< time derivatives of position variables
-	PosMomT<UVSph>(const UVSph& coordsys) : PosUVSph(coordsys)  {};
-	PosMomT<UVSph>(const PosUVSph& pos, const MomUVSph& mom):
-	    PosUVSph(pos), MomUVSph(mom) {};
-	void unpack_to(double *out) const {
-		out[0]=u; out[1]=v; out[2]=phi; out[3]=pu; out[4]=pv; out[5]=pphi; }
-};
-typedef struct PosMomT<UVSph> PosMomUVSph;
-
 
 ///@}
 /// \name   Primitive data types: gradient of a scalar function in different coordinate systems
@@ -697,11 +641,6 @@ template<> struct GradT<ProlSph>{
     double dlambda, dnu, dphi;
 };
 typedef struct GradT<ProlSph> GradProlSph;
-
-template<> struct GradT<UVSph>{
-	double du, dv, dphi;
-};
-typedef struct GradT<UVSph> GradUVSph;
 
 /// gradient of scalar function in universal spheroidal coordinates
 template<> struct GradT<Axi>{
@@ -743,11 +682,6 @@ template<> struct HessT<Sph>{
     double dr2, dtheta2, dphi2, drdtheta, dthetadphi, drdphi;
 };
 typedef struct HessT<Sph> HessSph;
-
-template<> struct HessT<UVSph>{
-	double du2, dv2, dudv;  ///< note: derivatives by phi are assumed to be zero
-};
-typedef struct HessT<UVSph> HessUVSph;
 
 /// Hessian of scalar function in prolate spheroidal coordinates
 template<> struct HessT<ProlSph>{
@@ -819,12 +753,6 @@ template<> struct PosDerivT<Sph, Car> {
 template<> struct PosDerivT<Sph, Cyl> {
     double dRdr, dRdtheta, dzdr, dzdtheta;
 };
-template<> struct PosDerivT<Cyl, UVSph> {
-	double dudR, dudz, dvdR, dvdz;
-};
-template<> struct PosDerivT<UVSph, Cyl> {
-	double dRdu, dRdv, dzdu, dzdv;
-};
 template<> struct PosDerivT<Cyl, ProlSph> {
     double dlambdadR, dlambdadz, dnudR, dnudz;
 };
@@ -876,12 +804,6 @@ template<> struct PosDeriv2T<Car, Sph> {
 };
 template<> struct PosDeriv2T<Cyl, Sph> {
     double d2rdR2, d2rdRdz, d2rdz2, d2thetadR2, d2thetadRdz, d2thetadz2;
-};
-template<> struct PosDeriv2T<Cyl, UVSph> {
-	double d2udR2, d2udRdz, d2udz2, d2vdR2, d2vdRdz, d2vdz2;
-};
-template<> struct PosDeriv2T<UVSph, Cyl> {
-	double d2Rdu2, d2Rdudv, d2Rdv2, d2zdu2, d2zdudv, d2zdv2;
 };
 template<> struct PosDeriv2T<Cyl, ProlSph> {
     double d2lambdadR2, d2lambdadRdz, d2lambdadz2, d2nudR2, d2nudRdz, d2nudz2;
@@ -1057,8 +979,6 @@ template<typename srcCS>
 inline PosCyl toPosCyl(const PosT<srcCS>& from) { return toPos<srcCS, Cyl>(from); }
 template<typename srcCS>
 inline PosSph toPosSph(const PosT<srcCS>& from) { return toPos<srcCS, Sph>(from); }
-template<typename srcCS>
-inline PosUVSph toPosUVSph(const PosT<srcCS>& from) { return toPos<srcCS, UVSph>(from); }
 
 /** universal templated conversion function for coordinates and velocities:
     template parameters srcCS and destCS may be any of the coordinate system names.
@@ -1129,16 +1049,6 @@ PosVelT<destCS> toPosVel(const PosMomT<srcCS>& from);
 template<typename srcCS>
 inline PosVelCyl toPosVelCyl(const PosMomT<srcCS>& from) {
 	return toPosVel<srcCS, Cyl>(from); }
-
-/*
- *Compute pu and pv from uv coords and VelCyl
-*/
-void UVmomenta(const PosUVSph&,const VelCyl&,double&,double&);
-
-/*
- *Compute vR and vz from uv coords and pu and pv
-*/
-void Rzmomenta(const PosUVSph&,const double,const double,VelCyl&);
 
 ///@}
 /// \name   Routines for conversion between position in different coordinate systems with derivatives

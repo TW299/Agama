@@ -10,7 +10,6 @@ LIBNAME_SHARED = agama.so
 LIBNAME_STATIC = agama.a
 OBJECTS  = $(patsubst %.cpp,$(OBJDIR)/%.o,$(SOURCES))
 TESTEXE  = $(patsubst %.cpp,$(EXEDIR)/%.exe,$(TESTSRCS))
-TORUSOBJ = $(patsubst %.cc,$(OBJDIR)/%.o,$(TORUSSRC))
 TESTEXEFORTRAN = $(patsubst %.f,$(EXEDIR)/%.exe,$(TESTFORTRAN))
 COMPILE_FLAGS_ALL += -I$(SRCDIR)
 
@@ -20,11 +19,11 @@ all:  lib $(TESTEXE) $(TESTEXEFORTRAN) nemo amuse
 # one may recompile just the shared and static versions of the library by running 'make lib'
 lib:  $(LIBNAME_STATIC) $(LIBNAME_SHARED)
 
-$(LIBNAME_STATIC):  $(OBJECTS) $(TORUSOBJ) Makefile Makefile.local Makefile.list
-	$(AR) ru $(LIBNAME_STATIC) $(OBJECTS) $(TORUSOBJ)
+$(LIBNAME_STATIC):  $(OBJECTS) Makefile Makefile.local Makefile.list
+	$(AR) ru $(LIBNAME_STATIC) $(OBJECTS)
 
-$(LIBNAME_SHARED):  $(OBJECTS) $(TORUSOBJ) Makefile Makefile.local Makefile.list
-	$(LINK) -shared -o $(LIBNAME_SHARED) $(OBJECTS) $(TORUSOBJ) $(LINK_FLAGS_ALL) $(LINK_FLAGS_LIB) $(LINK_FLAGS_LIB_AND_EXE_STATIC)
+$(LIBNAME_SHARED):  $(OBJECTS) Makefile Makefile.local Makefile.list
+	$(LINK) -shared -o $(LIBNAME_SHARED) $(OBJECTS) $(LINK_FLAGS_ALL) $(LINK_FLAGS_LIB) $(LINK_FLAGS_LIB_AND_EXE_STATIC)
 
 # two possible choices for linking the executable programs:
 # 1. shared (default) uses the shared library agama.so, which makes the overall code size smaller,
@@ -62,7 +61,7 @@ $(OBJDIR)/%.o:  $(SRCDIR)/%.cpp Makefile.local
 	@mkdir -p $(OBJDIR)
 	$(CXX) -c $(COMPILE_FLAGS_ALL) $(COMPILE_FLAGS_LIB) -o "$@" "$<"
 
-$(OBJDIR)/%.o:  $(TORUSDIR)/%.cc Makefile.local
+$(OBJDIR)/%.o: Makefile.local
 	$(CXX) -c $(COMPILE_FLAGS_ALL) $(COMPILE_FLAGS_LIB) -o "$@" "$<"
 
 clean:
@@ -105,7 +104,7 @@ $(AMUSE_WORKER_INIT):
 	@mkdir -p $(AMUSE_WORKER_DIR)
 	echo>>$(AMUSE_WORKER_DIR)/__init__.py
 
-$(AMUSE_WORKER): py/interface_amuse.py $(SRCDIR)/interface_amuse.cpp $(OBJECTS) $(TORUSOBJ) $(AMUSE_WORKER_INIT)
+$(AMUSE_WORKER): py/interface_amuse.py $(SRCDIR)/interface_amuse.cpp $(OBJECTS) $(AMUSE_WORKER_INIT)
 	cp py/interface_amuse.py $(AMUSE_INTERFACE)
 	cp py/example_amuse.py   $(AMUSE_WORKER_DIR)
 	cp py/test_amuse.py      $(AMUSE_WORKER_DIR)

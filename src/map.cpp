@@ -142,7 +142,7 @@ namespace actions{
     }//internal ns
     PTIso interpPTIso(double x, const PTIso& PT0, const PTIso& PT1){
         double xp = 1 - x;
-		coord::UVSph cs1(x * PT0.cs.Delta + xp * PT1.cs.Delta);
+		coord::Axi cs1(x * PT0.cs.Delta2 + xp * PT1.cs.Delta2);
 		double R1 = x * PT0.sc.x0 + xp * PT1.sc.x0;
 		std::vector<double> p, pr;
 		if (PT0.N == PT1.N)
@@ -180,7 +180,7 @@ namespace actions{
     }
     PTHarm interpPTHarm(double x, const PTHarm& PT0, const PTHarm& PT1){
         double xp = 1 - x;
-		coord::UVSph cs1(x * PT0.cs.Delta + xp * PT1.cs.Delta);
+		coord::Axi cs1(x * PT0.cs.Delta2 + xp * PT1.cs.Delta2);
 		double R1 = x * PT0.sc.x0 + xp * PT1.sc.x0;
 		double z1 = x * PT0.sc.x0 + xp * PT1.sc.x0;
 		std::vector<double> p, pr;
@@ -340,12 +340,12 @@ namespace actions{
 	}
 	coord::PosMomCyl PTHarm::revmap(const coord::PosMomCyl &Rz) const {
 		double R2 = pow_2(Rz.R), z2 = pow_2(Rz.z);
-		double B = R2 + z2 - pow_2(cs.Delta);
-		double r2 = .5 * (B + sqrt(B * B + 4 * R2 * pow_2(cs.Delta)));
+		double B = R2 + z2 - cs.Delta2;
+		double r2 = .5 * (B + sqrt(B * B + 4 * R2 * cs.Delta2));
 		double r0 = sqrt(r2);
 		double drdrn;
 		double r = rn2r(r0, paramsFr, sc, &drdrn);
-		double rt = sqrt(r2 + pow_2(cs.Delta));
+		double rt = sqrt(r2 + cs.Delta2);
 		double v = acos(Rz.z / rt), dzdv;
 		double snt, cst; math::sincos(v, snt, cst);
 		double pr = snt * Rz.pR + r0 / rt * cst * Rz.pz;
@@ -376,19 +376,21 @@ namespace actions{
         double dbot1dr = 2 * r;
 		double dbot2dr = -r / pow_3(rt) * bot1 + 2 * r / rt;
 		if(dRzdP){
+			int sgnD=math::sign(cs.Delta2);
+			double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 			if(N==0&&Nr==0){
 				dRzdP[0].R = dRzdP[0].phi = dRzdP[0].pphi = 0; 
-				dRzdP[0].z = cs.Delta / rt * cst;
-				dRzdP[0].pR = 2 * cs.Delta * snt * rp.pr/ (drndr*bot1)
-					- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-				dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+				dRzdP[0].z = Delta / rt * cst;
+				dRzdP[0].pR = 2 * Delta * snt * rp.pr/ (drndr*bot1)
+					- pR / bot1 * 2 * Delta * pow_2(snt);
+				dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 					+ pow_2(snt));
 			}else{
 				dRzdP[0].R = dRzdP[0].phi = dRzdP[0].pphi = 0; 
-				dRzdP[0].z = cs.Delta / rt * cst;
-				dRzdP[0].pR = 2 * cs.Delta * snt * rp.pr/ (drndr*bot1)
-					- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-				dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+				dRzdP[0].z = Delta / rt * cst;
+				dRzdP[0].pR = 2 * Delta * snt * rp.pr/ (drndr*bot1)
+					- pR / bot1 * 2 * Delta * pow_2(snt);
+				dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 					+ pow_2(snt));
 				dRzdP[0].phi=dRzdP[0].pphi=dRzdP[1].phi=dRzdP[1].pphi=0;
 				dRzdP[1].R=snt*drndx0;
@@ -459,20 +461,24 @@ namespace actions{
 		dRzdrt(3, 2) = r * cst / (bot2 * drndr); dRzdrt(3, 3) = -snt / (bot2 * dvdt);//dpz/dpr ppsi
         
 		if(dRzdP){
+			int sgnD=math::sign(cs.Delta2);
+			double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 			if(N==0&&Nr==0){
+				int sgnD=math::sign(cs.Delta2);
+				double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 				dRzdP[0].R = dRzdP[0].phi = dRzdP[0].pphi = 0; 
-				dRzdP[0].z = cs.Delta / rt * cst;
-				dRzdP[0].pR = 2 * cs.Delta * snt * rp.pr/ (drndr*bot1)
-					- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-				dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+				dRzdP[0].z = Delta / rt * cst;
+				dRzdP[0].pR = 2 * Delta * snt * rp.pr/ (drndr*bot1)
+					- pR / bot1 * 2 * Delta * pow_2(snt);
+				dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 					+ pow_2(snt));
 				dRzdP[0].phi=dRzdP[0].pphi;
 			}else{
 				dRzdP[0].R = dRzdP[0].phi = dRzdP[0].pphi = 0; 
-				dRzdP[0].z = cs.Delta / rt * cst;
-				dRzdP[0].pR = 2 * cs.Delta * snt * rp.pr/ (drndr*bot1)
-					- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-				dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+				dRzdP[0].z = Delta / rt * cst;
+				dRzdP[0].pR = 2 * Delta * snt * rp.pr/ (drndr*bot1)
+					- pR / bot1 * 2 * Delta * pow_2(snt);
+				dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 					+ pow_2(snt));
 				dRzdP[0].phi=dRzdP[0].pphi=dRzdP[1].phi=dRzdP[1].pphi=0;
 				dRzdP[1].R=snt*drndx0;
@@ -530,11 +536,13 @@ namespace actions{
         double dbot1dr = 2 * r;
 		double dbot2dr = -r / pow_3(rt) * bot1 + 2 * r / rt;
         if(dRzdP){
+			int sgnD=math::sign(cs.Delta2);
+			double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 			dRzdP[0].R =dRzdP[0].phi=dRzdP[0].pphi=0; 
-            dRzdP[0].z = cs.Delta / rt * cst;
-			dRzdP[0].pR = 2 * cs.Delta * snt * pr/ bot1
-				- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-			dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+            dRzdP[0].z = Delta / rt * cst;
+			dRzdP[0].pR = 2 * Delta * snt * pr/ bot1
+				- pR / bot1 * 2 * Delta * pow_2(snt);
+			dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 				+ pow_2(snt));
 			dRzdP[0].phi=dRzdP[0].pphi=0;
             dRzdP[1].R=snt*drndx0;
@@ -602,11 +610,13 @@ namespace actions{
 		dRzdrt(2, 2) = sq * snt / (bot1 * drdx); dRzdrt(2, 3) = r * cst / (bot1 * dvdz);//dpR/dpr ppsi
 		dRzdrt(3, 2) = r * cst / (bot2 * drdx); dRzdrt(3, 3) = -snt / (bot2 * dvdz);//dpz/dpr ppsi
         if(dRzdP){
+			int sgnD=math::sign(cs.Delta2);
+			double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 			dRzdP[0].R =dRzdP[0].phi=dRzdP[0].pphi=0; 
-            dRzdP[0].z = cs.Delta / rt * cst;
-			dRzdP[0].pR = 2 * cs.Delta * snt * pr/ bot1
-				- pR / bot1 * 2 * cs.Delta * pow_2(snt);
-			dRzdP[0].pz = -pz / bot2 * cs.Delta / rt * (-pow_2(r * cst) / sq
+            dRzdP[0].z = Delta / rt * cst;
+			dRzdP[0].pR = 2 * Delta * snt * pr/ bot1
+				- pR / bot1 * 2 * Delta * pow_2(snt);
+			dRzdP[0].pz = -pz / bot2 * Delta / rt * (-pow_2(r * cst) / sq
 				+ pow_2(snt));
             dRzdP[1].R=snt*drndx0;
             dRzdP[1].z=r/rt*cst*drndx0;

@@ -19,7 +19,7 @@ class PTIso: public BasePointTransform{
 		   double *dvdP = NULL, double* ddvdtdP = NULL) const;
 	double v2t(const double, double* = NULL) const;
 	public:
-		coord::UVSph cs;
+		coord::Axi cs;
 		std::vector<double> paramsF;
 		std::vector<double> paramsFr;
 		math::ScalingInfTh sc;
@@ -27,16 +27,16 @@ class PTIso: public BasePointTransform{
 		PTIso():
 		    paramsF({}),paramsFr({}),N(0),Nr(0){}
 		PTIso(double _D):
-		    cs(_D),paramsF({}),paramsFr({}),N(0),Nr(0){}
-		PTIso(coord::UVSph _cs):
+		    cs(_D*_D),paramsF({}),paramsFr({}),N(0),Nr(0){}
+		PTIso(coord::Axi _cs):
 		    cs(_cs),paramsF({}),paramsFr({}),N(0),Nr(0){}
 		PTIso(double _D, const std::vector<double>& _p) :
-		    cs(_D), paramsF(_p), paramsFr({}), N(_p.size()),Nr(0) {}
-		PTIso(coord::UVSph _cs, const std::vector<double>& _p) :
+		    cs(_D*_D), paramsF(_p), paramsFr({}), N(_p.size()),Nr(0) {}
+		PTIso(coord::Axi _cs, const std::vector<double>& _p) :
 		    cs(_cs), paramsF(_p), paramsFr({}), N(_p.size()),Nr(0) {}
 		PTIso(double _D, math::ScalingInfTh _sc, std::vector<double>& _p, std::vector<double> _pr) :
-		    cs(_D), paramsF(_p), paramsFr(_pr), sc(_sc), N(_p.size()),Nr(_pr.size()) {}
-		PTIso(coord::UVSph _cs, math::ScalingInfTh _sc, std::vector<double>& _p, std::vector<double> _pr) :
+		    cs(_D*_D), paramsF(_p), paramsFr(_pr), sc(_sc), N(_p.size()),Nr(_pr.size()) {}
+		PTIso(coord::Axi _cs, math::ScalingInfTh _sc, std::vector<double>& _p, std::vector<double> _pr) :
 		    cs(_cs), paramsF(_p), paramsFr(_pr), sc(_sc), N(_p.size()), Nr(_pr.size()) {}
 		virtual coord::PosMomCyl map(const coord::PosMomSph &point, coord::PosMomCyl* dRzdP,
 					     coord::PosMomCyl *dRzdFr, coord::PosMomCyl *dRzdFz) const;
@@ -61,10 +61,12 @@ class PTIso: public BasePointTransform{
 		virtual const char* name() const{return "Isochrone";}
 		virtual void getParams(double* params=NULL, double* Fourr=NULL, double* Fourz=NULL) const{
 			if(params){
+				int sgnD=math::sign(cs.Delta2);
+				double Delta=sgnD*sqrt(sgnD*cs.Delta2);
 				if(N==0&&Nr==0){
-					params[0]=cs.Delta;
+					params[0]=Delta;
 				}else{
-					params[0]=cs.Delta;
+					params[0]=Delta;
 					params[1]=sc.x0;
 				}
 			}
@@ -94,7 +96,7 @@ class PTHarm : public BasePointTransform{
 		     double *ddvdtdFC = NULL) const;
 	double vtozn(const double v, double* dzdv = NULL) const;
 	public:
-		coord::UVSph cs;
+		coord::Axi cs;
 		std::vector<double> paramsF;
 		std::vector<double> paramsFr;
 		math::ScalingInfTh sc;
@@ -103,9 +105,9 @@ class PTHarm : public BasePointTransform{
 		PTHarm():
 		    paramsF({}),paramsFr({}),N(0),Nr(0){}
 		PTHarm(double _D, math::ScalingInfTh _sc, math::ScalingInfTh _scz, std::vector<double>& _p, std::vector<double> _pr) :
-		    cs(_D), paramsF(_p), paramsFr(_pr), sc(_sc), scz(_scz), N(_p.size()),Nr(_pr.size()) {
+		    cs(_D*_D), paramsF(_p), paramsFr(_pr), sc(_sc), scz(_scz), N(_p.size()),Nr(_pr.size()) {
 		}
-		PTHarm(coord::UVSph _cs, math::ScalingInfTh _sc, math::ScalingInfTh _scz, std::vector<double>& _p, std::vector<double> _pr) :
+		PTHarm(coord::Axi _cs, math::ScalingInfTh _sc, math::ScalingInfTh _scz, std::vector<double>& _p, std::vector<double> _pr) :
 		    cs(_cs), paramsF(_p), paramsFr(_pr), sc(_sc), scz(_scz), N(_p.size()), Nr(_pr.size()) {
 		}
 		virtual coord::PosMomCyl map(const coord::PosMomCyl &point, coord::PosMomCyl* dRzdP,
@@ -130,7 +132,9 @@ class PTHarm : public BasePointTransform{
 		}
 		virtual void getParams(double* params=NULL, double* Fourr=NULL, double* Fourz=NULL) const{
 			if(params){
-				params[0]=cs.Delta;
+				int sgnD=math::sign(cs.Delta2);
+				double Delta=sgnD*sqrt(sgnD*cs.Delta2);
+				params[0]=Delta;
 				params[1]=sc.x0;
 				params[2]=scz.x0;
 			}
