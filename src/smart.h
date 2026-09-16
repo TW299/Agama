@@ -113,6 +113,7 @@ class BasePotential;
 class OblatePerfectEllipsoid;
 class PhaseVolume;
 class PolarInterpolator;
+class ShellInterpolator;
 /// shared pointer to a density object
 typedef shared_ptr<const BaseDensity>   PtrDensity;
 /// shared pointer to a potential object
@@ -124,6 +125,8 @@ typedef shared_ptr<const PhaseVolume>   PtrPhaseVolume;
 
 typedef shared_ptr<const PolarInterpolator> PtrPolarInterpolator;
 
+typedef shared_ptr<const ShellInterpolator> PtrShellInterpolator;
+
 }  // namespace potential
 
 
@@ -131,11 +134,17 @@ namespace actions{
 
 class BaseActionFinder;
 class BaseActionMapper;
+class BasePointTransform;
+class BaseToyMap;
 
 /// shared pointer to an action finder object
 typedef shared_ptr<const BaseActionFinder> PtrActionFinder;
 /// shared pointer to an action mapper object
 typedef shared_ptr<const BaseActionMapper> PtrActionMapper;
+/// shared pointer to a PointTransformation object
+typedef shared_ptr<const BasePointTransform> PtrPointTransform;
+/// shared pointer to a ToyMap object
+typedef shared_ptr<const BaseToyMap> PtrToyMap;
 
 }  // namespace actions
 

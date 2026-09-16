@@ -7,6 +7,7 @@
 #include <gsl/gsl_min.h>
 #include <gsl/gsl_integration.h>
 #include <gsl/gsl_version.h>
+#include <gsl/gsl_fft_real.h>
 #include <stdexcept>
 #include <cassert>
 #include <cmath>
@@ -138,6 +139,15 @@ double pow(double x, double n)
     if(n == 3.0) return x*x*x;
     if(n ==-3.0) return 1/(x*x*x);
     return std::pow(x, n);
+}
+
+double modulus(const std::complex<double>& z){
+	return sqrt(pow_2(z.real())+pow_2(z.imag()));
+}
+
+/** return argument of a complex number in units of PI */
+double arg(const std::complex<double>& z){
+	return atan2(z.imag(),z.real())/M_PI;
 }
 
 double wrapAngle(double x)
@@ -295,6 +305,33 @@ template<> double unscale(const ScalingInf& /*scaling*/, double s, double* duds)
     if(duds)
         *duds = 1 / pow_2(1-s) + 1 / pow_2(s);
     return 1 / (1-s) - 1 / s;
+}
+
+double scale(const ScalingInfTh& scaling, double x,double *dsdx, double *d2sdx2) {
+	if(std::isinf(x)){
+		if(dsdx)*dsdx=0;
+		if(d2sdx2)*d2sdx2=0;
+		return 1;
+	}
+	double tnhx = tanh(x /scaling.x0);
+	double sechx2 = 1 - tnhx * tnhx;
+	double s = .5 * (tnhx + 1);
+	if (dsdx) *dsdx = .5 * sechx2 / scaling.x0;
+	if (d2sdx2) *d2sdx2 = -sechx2 * tnhx / pow_2(scaling.x0);
+	return s;
+}
+template<> double scale(const ScalingInfTh& scaling, double x) {
+	return scale(scaling, x);
+}
+double unscale(const ScalingInfTh& scaling, double s, double* dxds, double *d2xds2) {
+	double x = scaling.x0 * atanh(2 * s - 1);
+	double inv = (dxds||d2xds2)? 1. / (1 - pow_2(2 * s - 1)):0;
+	if (dxds) *dxds = 2 * scaling.x0 * inv;
+	if (d2xds2) *d2xds2 = 8 * scaling.x0 * (2 * s - 1) * pow_2(inv);
+	return x;
+}
+template<> double unscale(const ScalingInfTh& scaling, double s, double* dxds) {
+	return  unscale(scaling, s, dxds, NULL);
 }
 
 // u in (-inf, u0] or [u0, +inf), when u0 is +-zero or the sign of u0 is the same as the sign of infinity
@@ -1388,6 +1425,248 @@ void integrateNdim(const IFunctionNdim& F, const double xlower[], const double x
     const double relToler, const int maxNumEval, double result[], double error[], int* numEval)
 {
     CubatureWorker(F, xlower, xupper, relToler, maxNumEval, result, error, numEval).run();
+}
+
+void getDFT(double data[],const int N){
+	gsl_fft_real_radix2_transform(data,1,N);
+}
+
+line& line::operator= (const line& aline){
+	nu=aline.nu; A=aline.A; phi=aline.phi; resid=aline.resid; diag=aline.diag;
+	return *this;
+}
+FrequencyFinder::FrequencyFinder(double* ts,double* tc,const int _NF,double _deltat,
+		       const double _frqmin,const double _frqmax) :
+    NF(_NF), deltat(_deltat), frqmin(_frqmin), frqmax(_frqmax){
+	NF5=NF/2;
+	z = new double[NF5+2];
+	Z=new cmplx[NF5+1];
+	for(int i=0;i<NF5;i++)
+		Z[i]=cmplx(tc[i],ts[i]);
+	Z[NF5]=cmplx(tc[NF5],0);
+	discrm=0.01;
+	sin0=sin(M_PI/(double)NF); cos0=cos(M_PI/(double)NF);
+	wmin=2.*M_PI/((double)NF*deltat);
+}
+FrequencyFinder::FrequencyFinder(double* data,const int _NF,double _deltat,
+		       const double _frqmin,const double _frqmax) :
+    NF(_NF), deltat(_deltat), frqmin(_frqmin), frqmax(_frqmax){
+	NF5=NF/2;
+	z = new double[NF5+2];
+	Z = new cmplx[NF5+1];
+	math::getDFT(data,NF);
+	for(int i=1; i<NF5; i++){
+		Z[i]=cmplx(data[i],data[NF-i]);
+	}
+	Z[0]=cmplx(data[0],0); Z[NF5]=cmplx(data[NF5],0);
+	discrm=0.01;
+	sin0=sin(M_PI/(double)NF); cos0=cos(M_PI/(double)NF);
+	wmin=2.*M_PI/((double)NF*deltat);
+}
+std::vector<line> FrequencyFinder::analyse(double& resid){
+	std::vector<line> lines;
+	pwr0=get_pwr(); pwr_best=1e6;
+	double pwr=pwr0, zmx, zstop;
+	while(pwr>.001*pwr0 && pwr<pwr_best){
+		pwr_best=pwr;
+		int jmx=difference(zmx);//compute z, the second difference of the spectrum
+		if(lines.size() == 0) zstop=1e-8*zmx;
+		if(jmx <= 2)  jmx=0;
+		if(z[jmx] < zstop) break;
+		for(int i=0;i<4;i++){//evaluate quantities near point of peak curvature
+			int k=jmx-1+i;
+			zl[i]=(Zt(k-1)-Zt(k))+(Zt(k+1)-Zt(k));
+			if(k>=0) z[k]=sqrt(z[k]);
+		}
+		bool isol=true;
+		for(int i=0; i<3; i+=2){
+			isol=(isol && fabs(std::imag(zl[i]/zl[1]))<discrm);
+		}
+		if(isol || jmx<=1){
+			if(isol && jmx>0)
+				pwr=isolated(jmx,lines);
+			else
+				pwr=lowFreq(jmx,lines);
+		} else
+			pwr=pair(jmx,lines);
+	}
+	order(lines);
+	resid=pwr_best/pwr0;
+	return lines;
+}
+double FrequencyFinder::get_pwr(void){//pwr is a measure of the unclaimed portion of the spectrum
+	double Zpwr=0;
+	for(int i=0;i<NF5;i++)
+		Zpwr+=std::norm(Z[i]);
+	return sqrt(Zpwr/(double)(NF5));
+}
+int FrequencyFinder::difference(double& zmx){
+	zmx=0;
+	int jmx=0;
+	for(int j=0;j<NF5-1;j++){
+		z[j]=std::norm((Zt(j)-Zt(j-1))+(Zt(j)-Zt(j+1)));
+		if(z[j]>zmx){
+			zmx=z[j]; jmx=j;
+		}
+	}
+	return jmx;
+}
+void FrequencyFinder::Zsubtract(int jmx,double x,cmplx zox){
+	double sp = sin(M_PI*(x-(double)jmx)/(double)NF);//sin(pi*x_k/N) at origin
+	double cp = cos(M_PI*(x-(double)jmx)/(double)NF);//cos same
+	double sm = -sp, cm = cp;//sin & cos of pi*xk/N of line at -ve frequency
+	cmplx zp = zox*x, zm = -std::conj(zp);
+	for(int j=0; j<NF5; j++){
+		if(j == jmx && fabs(x) < .01){
+			if(jmx>0 || fabs(x)>.001)
+				Z[j]-=cmplx(zox*cmplx(cp*(double)NF/M_PI,x)+zm*cmplx(cm/sm,1));
+			else
+				Z[j]-=cmplx(zox*cmplx(cp*(double)NF/M_PI,x));
+		}else
+			Z[j]-=zp*cmplx(cp/sp,1) + zm*cmplx(cm/sm,1);
+//  Now add pi/N to args of sines & cosines
+		double save = sp*cos0 + cp*sin0;//sp advanced
+		cp = cp*cos0 - sp*sin0;
+		sp = save;
+		save = sm*cos0 + cm*sin0;//sm advanced
+		cm = cm*cos0 - sm*sin0;
+		sm = save;
+	}
+}
+double FrequencyFinder::isolated(int jmx,std::vector<line>& lines){
+	line aline;
+	int k= z[jmx+1] > z[jmx-1]? k=jmx+1 : jmx-1;
+	double wcor=(double)(jmx-k)*(2*z[k]-z[jmx])/(z[jmx]+z[k]);
+	double freq=((double)jmx-wcor)*wmin;
+	cmplx zox=.5*M_PI/(double)NF*(wcor*wcor-1)*zl[1];
+	if(freq < frqmin || freq >= frqmax){
+		Zsubtract(jmx,wcor,zox);
+		return get_pwr();
+	}
+	aline.diag=0;
+	aline.nu=freq;
+	aline.A=fabs(wcor*wcor-1.)*z[jmx]/(double)(NF);
+	if(fabs(wcor) > 1e-9) aline.A*=M_PI*wcor/sin(M_PI*wcor);
+	aline.phi=M_PI*wcor+std::arg(zox);
+	if(wcor*sin(M_PI*wcor) < 0) aline.phi+=M_PI;
+	Zsubtract(jmx,wcor,zox);
+	double pwr=get_pwr(); aline.resid=pwr/pwr0;
+	if(pwr<pwr_best) lines.push_back(aline);
+	return pwr;
+}
+double FrequencyFinder::lowFreq(int jmx,std::vector<line>& lines){//algorithm for low-frequency component
+	line aline;
+	double wcor,freq;
+	cmplx zox;
+	if(fabs(std::imag(zl[2])) < 1e-2*fabs(std::real(zl[2]))){
+		wcor=0; zox=-.5*std::real(zl[1]);
+	}else{
+		wcor=std::imag(2.*zl[2]+9.*zl[3])/std::imag(zl[3]-2.*zl[2]);
+		wcor=-sqrt(fmax(wcor,0));
+		if(wcor == 0){//there's only the zero-freq line
+			zox=-std::real(zl[1]);
+		}else{
+			zox=std::real(zl[2]*(wcor*wcor-4)-zl[1]*(wcor*wcor+2))/(3*wcor*wcor);
+		}
+	}
+	if(frqmin <= 0){
+		aline.diag=1; aline.nu=0;
+		aline.A=std::abs(zox)/(double)(NF);
+		aline.phi=std::arg(zox);
+	}
+	zl[1]+=2.*zox; zl[2]-=2.*zox;
+	zox*=M_PI/(double)NF;
+	Zsubtract(jmx,0,zox);
+	double pwr=get_pwr();
+	if(frqmin <= 0){
+		aline.resid=pwr/pwr0;
+		if(pwr<pwr_best) lines.push_back(aline);
+	}			
+	if(fabs(wcor) > 4 || -wcor < 1e-5){
+		return pwr;
+	}
+	double ampr,ampi,tmod1,tmod2,fac;
+	if(wcor < -1){
+		double wcor2=wcor*wcor;
+		ampr=-std::real(zl[3])*(9-wcor2)*(4-wcor2)*(1-wcor2)/(2*wcor2*(11+wcor2));
+		ampi=-(4-wcor2)*(1-wcor2)/(6.*wcor)*
+		     ((wcor+2)*std::imag(zl[2])+.5*(wcor+1)*
+		      (9-wcor2)*std::imag(zl[3])/(1+wcor2));
+		tmod2=.5*M_PI/(double)NF*ampr;
+		fac=wcor*M_PI/sin(wcor*M_PI);
+		ampr*=fac; ampi*=fac;
+	}else{
+		ampr=.5*std::real(zl[1])*(wcor*wcor-1);
+		tmod2=.5*M_PI/(double)NF*ampr;
+		if(-wcor > 1e-5){
+			ampr*=M_PI*wcor/sin(M_PI*wcor);
+			ampi=ampr*std::imag(zl[2])*(4-wcor*wcor)/(3*std::real(zl[1])*wcor);
+		} else
+			ampi=0;
+	}
+	tmod1=tmod2*ampi/ampr;
+	freq=-wcor*wmin;
+	if(freq < frqmin){
+		Zsubtract(jmx,wcor,cmplx(tmod2,tmod1));
+		return get_pwr(); 
+	}
+	aline.diag=2; aline.nu=freq;
+	aline.A=sqrt(pow_2(ampr)+pow_2(ampi))/(double)(NF);
+	aline.phi=M_PI*wcor+atan2(tmod1,tmod2);
+	if(wcor*sin(M_PI*wcor) < 0) aline.phi+=M_PI;
+	Zsubtract(jmx,wcor,cmplx(tmod2,tmod1));
+	pwr=get_pwr(); aline.resid=pwr/pwr0;
+	if(pwr<pwr_best) lines.push_back(aline);
+	return pwr;
+}
+double FrequencyFinder::pair(int jmx,std::vector<line>& lines){// algorithm for examining close pairs of lines
+	line aline;
+	double a=std::imag((zl[1]-zl[2])*std::conj(zl[1]-zl[0]));
+	double b=std::imag((zl[1]-zl[2])*std::conj(zl[1]+2.*zl[0])
+			   -(zl[1]+2.*zl[2])*std::conj(zl[1]-zl[0]));
+	double c=-std::imag((zl[1]+2.*zl[2])*std::conj(zl[1]+2.*zl[0]));
+	double disc=(.25*b*b-a*c);
+	if(disc < 0 || a == 0)  return isolated(jmx, lines);
+	disc=sqrt(disc);
+	double pwr, x[2]={(-.5*b+disc)/a, (-.5*b-disc)/a};
+	if((double)jmx < fmin(x[0],x[1]))  return get_pwr();
+	if(fabs(x[1]) < fabs(x[0])) std::swap(x[0],x[1]);
+	for(int i=0;i<2;i++){
+		if(fabs(x[i])>0.9) continue;
+		int j=(1+i)%2;//now get 2 estimates of the amplitude
+		double fac1=(x[i]+1)/((x[j]-1)/(x[i]-1)-(x[j]+2)/(x[i]+2));
+		cmplx amp1=fac1*(zl[1]*(x[j]-1)-zl[2]*(x[j]+2));
+		double fac2=(x[i]-1)/((x[j]+1)/(x[i]+1)-(x[j]-2)/(x[i]-2));
+		cmplx amp2=fac2*(zl[1]*(x[j]+1)-zl[0]*(x[j]-2));
+		cmplx amp=.5*(amp2*(1+2*x[i])+amp1*(1-2*x[i]));//merged estimate
+		double freq=((double)jmx-x[i])*wmin;
+		amp*=.5*M_PI/(double)NF;
+		Zsubtract(jmx,x[i],amp);
+		pwr=get_pwr();
+		if(freq >= frqmin && freq < frqmax){
+			aline.diag=3; aline.nu=freq;
+			aline.A=sqrt(std::norm(amp))*2/M_PI;
+			if(fabs(x[i]) > 1e-5)  aline.A *=fabs(M_PI*x[i]/sin(M_PI*x[i]));
+			aline.phi=M_PI*x[i]+std::arg(amp);
+			aline.resid=pwr/pwr0;
+			if(x[i]*sin(M_PI*x[i]) < 0) aline.phi+=M_PI;
+			if(pwr<pwr_best) lines.push_back(aline);
+		}
+	}
+	return pwr;
+}
+void FrequencyFinder::order(std::vector<line>& lines){
+	bool ordered;
+	do{
+		int i=lines.size()-1; ordered=true;
+		while(i>0){
+			if(lines[i].A>lines[i-1].A){
+				std::swap(lines[i-1],lines[i]);
+				ordered=false;
+			}
+			i--;
+		}
+	} while(!ordered);
 }
 
 }  // namespace

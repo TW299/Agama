@@ -667,6 +667,14 @@ double z_max(const BasePotential& potential, double E, double R) {
     return exp(math::findRoot(zmaxRootFinder(potential, E,R), math::ScalingInf(), ACCURACY_ROOT));
 }
 
+double E_circ(const BasePotential& potential, const double L, double* _Rc, double* _Vc){
+	double Rc = R_from_Lz(potential, L);
+	if(_Rc) *_Rc = Rc;
+	double Vc = v_circ(potential, Rc);
+	if(_Vc) *_Vc = Vc;
+	return .5*pow_2(Vc)+potential.value(coord::PosCyl(Rc,0,0));
+}
+
 void epicycleFreqs(const BasePotential& potential, const double R,
     double& kappa, double& nu, double& Omega)
 {

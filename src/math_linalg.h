@@ -494,6 +494,9 @@ public:
 
     /// Solve the matrix equation `M x = rhs` for x, using the LU decomposition of matrix M
     std::vector<double> solve(const std::vector<double>& rhs) const;
+
+    // Find inverse
+    Matrix<double> inverse(const int) const;
 };
 
 

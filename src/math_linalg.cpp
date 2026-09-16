@@ -1681,4 +1681,17 @@ template struct SparseMatrix<double>;
 template struct Matrix<float>;
 template struct Matrix<double>;
 
+Matrix<double> LUDecomp::inverse(const int ncol) const{
+	Matrix<double> Inv(ncol,ncol);
+	for(int i=0; i<ncol; i++){
+		std::vector<double> rhs;
+		for(int j=0; j<ncol; j++){
+			if(j==i) rhs.push_back(1); else rhs.push_back(0);
+		}
+		std::vector<double> a(solve(rhs));
+		for(int j=0; j<ncol; j++) Inv(j,i)=a[j];
+	}
+	return Inv;
+}
+
 }  // namespace

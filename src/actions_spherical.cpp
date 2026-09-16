@@ -746,4 +746,10 @@ coord::PosVelCyl ActionFinderSpherical::map(const ActionAngles& aa, Frequencies*
     return mapPointFromActionAngles(aa, pot, E, L, R1, R2, Omegar, Omegaz);
 }
 
+void mapHJr(const potential::BasePotential &pot,math::QuinticSpline2d& intJr,math::QuinticSpline2d& intE){
+    potential::Interpolator2d potint(pot);
+    intJr=createActionInterpolator(potint);
+    intE=createEnergyInterpolator(potint,intJr);
+}
+
 }  // namespace actions

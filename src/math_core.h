@@ -5,6 +5,7 @@
 */
 #pragma once
 #include "math_base.h"
+#include <complex>
 
 namespace math{
 
@@ -34,6 +35,12 @@ double pow(double x, int n);
 /** return a number raised to the given power,
     taking shortcuts for a few common values of n such as 0.5 or 2 */
 double pow(double x, double n);
+
+/** return modulus of a complex number */
+double modulus(const std::complex<double>&);
+
+/** return argument of a complex number in units of PI */
+double arg(const std::complex<double>& );
 
 
 /** wraps the input argument into the range [0,2pi),
@@ -138,6 +145,14 @@ private:
 /// this is useful for finding roots on the entire real axis, if the magnitude of the unscaled
 /// variable u is known to be moderate (e.g., it is a logarithm of some other quantity)
 struct ScalingInf {};
+
+/// transforms -inf<=x<=inf to -1<=s<=1 via s=arctanh(x/x0), where x0 is some chosne scale factor.
+struct ScalingInfTh{
+	double x0;
+	ScalingInfTh(double _x0=1):x0(_x0){}
+};
+double scale(const ScalingInfTh& scaling, double x,double *dsdx=NULL, double *d2sdx2=NULL);
+double unscale(const ScalingInfTh& scaling, double s, double* dxds, double *d2xds2);
 
 /// transform a semi-infinite interval 
 /// 0 <= u <= +inf,       or  -inf <= u <= -0,  or  
@@ -607,6 +622,84 @@ extern const double * const GLWEIGHTS[MAX_GL_ORDER+1];
 void integrateNdim(const IFunctionNdim& F, const double xlower[], const double xupper[],
     const double relToler, const int maxNumEval,
     double result[], double error[]=NULL, int* numEval=NULL);
+
+/*
+ Wrapper for gsl routine for taking DFT of real functions. on exit:
+ for k < n/2 the real part of the k-th term is stored in data[k], and the
+ corresponding imaginary part is stored in data[n-k]. Terms with k > n/2 can be
+ reconstructed using the symmetry z_k = z^*_{n-k}. The terms for k=0 and k=n/2
+ are both purely real, and are stored in data[0] and data[n/2] respectively,
+*/
+void getDFT(double data[],const int n);
+
+/*
+   Based on program by D. Wood. modified by D. Spergel sept 82 & J Binney
+   august 83 this defines a class to identify sinusoidal terms in the DFT of a time
+   series. ts(NF/2) is the sine transform and tc(NF/2+1) is the cosine
+   transform of a data stream NF long with data points separated by Dt so
+   last point is (NF-1)Dt later than the first. Only terms with
+   frequencies between frqmin (default 0) and frqmax (default 1e6) are added
+   to the returned list of lines. The resid member of a line is
+   the fraction of the original power left in the spectrum after that line's
+   contributioon has been subtracted, so successful functioning of
+   analyse() is very small resid for the last extracted (weakest) line.
+   */
+/*
+ A class to hold information about a sinusoidal contribution to the
+ spectrum
+*/
+
+typedef std::complex<double> cmplx;
+
+class line{
+	private:
+	public:
+		line(void){};
+		~line(void){};
+		line& operator = (const line&);
+		double A;
+		double nu;
+		double phi;
+		double resid;
+		unsigned int diag;//0 reg isol, 1 zero freq, 2 low freq, 3 pair
+};
+
+/*
+   The class of spectrum analysers. The actual work is done by analyse()
+*/
+class FrequencyFinder{
+	private:
+		int NF,NF5;
+		double* z;// work space seized and released
+		cmplx* Z;
+		const double deltat;// interval between input times
+		const double frqmin, frqmax;//lowest & highest frequencies to be saved
+		cmplx zl[4];//2nd difference of spectrum near current peak
+		double wmin,/*freq resolution*/ discrm;//angle difference considered insignificant
+		double pwr0,/*input power*/ pwr_best;
+		double sin0, cos0;//sin and cos pi/NF 
+		double get_pwr();
+		int difference(double&);//comput 2nd difference and return location and value of peak
+		void Zsubtract(int,double,cmplx);
+		double isolated(int,std::vector<line>&);//analyse an isolated peak
+		double lowFreq(int,std::vector<line>&);//analyse a peak near zero frequency
+		double pair(int,std::vector<line>&);//analyse a peak possibly caused by two frequencies
+		void order(std::vector<line>&);//amalgamate lines (not used)
+		inline cmplx Zt(int i){
+			return i<0? std::conj(Z[-i]) : Z[i];
+		}
+	public:
+		//Initialise with sine ts & cosine ts transforms
+		FrequencyFinder(double* _ts,double* _tc,const int _NF,const double _dt,
+			   const double _frqmin=0,const double _frqmax=1e6);
+		//Initialise with time series data
+		FrequencyFinder(double* data,const int _NF,const double _dt,
+			   const double _frqmin=0,const double _frqmax=1e6);
+		~FrequencyFinder(void){
+			delete[] z; delete[] Z;
+		}
+		std::vector<line> analyse(double&);
+};
 
 ///@}
 

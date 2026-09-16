@@ -869,8 +869,6 @@ distutils.core.setup(
     author           = 'Eugene Vasiliev',
     author_email     = 'eugvas@protonmail.com',
     license          = 'GPL,MIT,BSD',
-    url              = 'https://github.com/GalacticDynamics-Oxford/Agama',
-    download_url     = 'https://github.com/GalacticDynamics-Oxford/Agama/archive/master.zip',
     long_description = open('README').read(),
     requires         = ['setuptools','wheel','numpy'],
     packages         = ['agama'],

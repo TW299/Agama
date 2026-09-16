@@ -14,6 +14,7 @@ SOURCES   = interface_c.cpp \
             interface_python.cpp \
 	    math_core.cpp \
             math_fit.cpp \
+	    math_fourier.cpp \
             math_gausshermite.cpp \
             math_geometry.cpp \
             math_linalg.cpp \
@@ -25,6 +26,11 @@ SOURCES   = interface_c.cpp \
             math_sphharm.cpp \
             math_spline.cpp \
             particles_io.cpp \
+	    actions_newtorus.cpp \
+	    actions_newisochrone.cpp\
+	    actions_harmonicoscillator.cpp\
+	    actions_newgenfnc.cpp\
+	    map.cpp\
             actions_factory.cpp \
             actions_focal_distance_finder.cpp \
             actions_isochrone.cpp \
@@ -85,6 +91,7 @@ TORUSSRC  = CHB.cc \
 
 # test and example programs
 TESTSRCS  = test_galaxymodel.cpp \
+	    test_actions.cpp \
             example_actions_nbody.cpp \
             example_df_fit.cpp \
             example_doublepowerlaw.cpp \

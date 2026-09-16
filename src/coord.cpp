@@ -96,7 +96,25 @@ template<> PosProlSph toPosDeriv(const PosCyl& from,
 template<> PosProlSph toPos(const PosCyl& from, const ProlSph cs) {
     return toPosDeriv<Cyl,ProlSph>(from, NULL, NULL, cs);
 }
-
+UVSph interpUVSph(const double x, const UVSph& C0, const UVSph& C1){
+	return UVSph(x*C0.Delta+(1-x)*C1.Delta);
+}
+template<>
+PosCyl toPos(const PosUVSph& p,const Cyl) {
+	if(p.u<0)
+		throw std::invalid_argument("Incorrect UVSph coordinates");
+	const double R = p.coordsys.Delta * sinh(p.u) * sin(p.v);
+	const double z = p.coordsys.Delta * cosh(p.u) * cos(p.v);
+	return PosCyl(R, z, p.phi);
+}
+// declare an instantiation which will be defined later
+template<>
+PosUVSph toPosDeriv(const PosCyl& from, const UVSph& cs,
+			  PosDerivT<Cyl, UVSph>* derivs, PosDeriv2T<Cyl, UVSph>* derivs2);
+template<>
+PosUVSph toPos(const PosCyl& from, const UVSph cs) {
+	return toPosDeriv<Cyl,UVSph>(from, cs, NULL, NULL);
+}
 
 //-------- position conversion with derivatives --------//
 
@@ -272,6 +290,53 @@ PosCyl toPosDeriv(const PosSph& p, PosDerivT<Sph, Cyl>* deriv, PosDeriv2T<Sph, C
     return PosCyl(R, z, p.phi);
 }
 
+template<> PosCyl toPosDeriv(const PosUVSph& p, PosDerivT<UVSph, Cyl>* deriv, PosDeriv2T<UVSph, Cyl>* deriv2, const Cyl)
+{
+	const double sn = sin(p.v), cs = cos(p.v);
+	const double sh = sinh(p.u), ch = cosh(p.u);
+	const double R = p.coordsys.Delta * sh * sn;
+	const double z = p.coordsys.Delta * ch * cs;
+	if(deriv!=NULL) {
+		deriv->dRdu = p.coordsys.Delta * ch * sn;
+		deriv->dRdv = p.coordsys.Delta * sh * cs;
+		deriv->dzdu = p.coordsys.Delta * sh * cs;
+		deriv->dzdv =-p.coordsys.Delta * ch * sn;
+	}
+	if(deriv2!=NULL) {
+		deriv2->d2Rdu2  = R;
+		deriv2->d2Rdv2  =-R;
+		deriv2->d2Rdudv = z;
+		deriv2->d2zdu2  = z;
+		deriv2->d2zdv2  =-z;
+		deriv2->d2zdudv =-R;
+	}
+	return PosCyl(R, z, p.phi);
+}
+
+template<> PosUVSph toPosDeriv(const PosCyl& from, const UVSph& cs,
+			PosDerivT<Cyl, UVSph>* deriv, PosDeriv2T<Cyl, UVSph>* deriv2)
+{
+	double R2 = pow_2(from.R), z2 = pow_2(from.z);
+	double R2_z2 = (R2+z2)/cs.Delta2;
+	double shu2 = .5*(R2_z2-1 + sqrt(pow_2(1-R2_z2)+4*R2/cs.Delta2));
+	double shu = sqrt(shu2);
+	double chu2 = 1+shu2, chu=sqrt(chu2), ch2u=chu2+shu2;
+	double cosv = from.z/(cs.Delta*chu), cosv2=cosv*cosv;
+	double sinv = sqrt(1-cosv2), cos2v = cosv2 - pow_2(sinv);;
+	double u = asinh(shu);
+	double v = acos(cosv);
+	if(deriv!=NULL){
+		deriv->dudR = cs.Delta * chu * sinv / (cs.Delta2 * ch2u - R2 - z2);
+		deriv->dudz = cs.Delta * shu * cosv / (cs.Delta2 * ch2u - R2 - z2);
+		deriv->dvdR = cs.Delta * shu * cosv / (R2+z2-cs.Delta2*cos2v);
+		deriv->dvdz =-cs.Delta * chu * sinv / (R2+z2-cs.Delta2*cos2v);
+	}
+	if(deriv2!=NULL) {
+		//Missing code
+	}
+	return PosUVSph(u, v, from.phi, cs);
+}
+
 template<>
 PosCyl toPosDeriv(const PosProlSph& p, PosDerivT<ProlSph, Cyl>* deriv, PosDeriv2T<ProlSph, Cyl>* deriv2, const Cyl)
 {
@@ -346,6 +411,28 @@ PosProlSph toPosDeriv(const PosCyl& from, PosDerivT<Cyl, ProlSph>* deriv, PosDer
         }
     }
     return PosProlSph(lambda, absnu*signz, from.phi, cs);
+}
+PosCyl toPosDeriv(const PosUVSph& p, PosDerivT<UVSph, Cyl>* deriv, PosDeriv2T<UVSph, Cyl>* deriv2)
+{
+	const double sn = sin(p.v), cs = cos(p.v);
+	const double sh = sinh(p.u), ch = cosh(p.u);
+	const double R = p.coordsys.Delta * sh * sn;
+	const double z = p.coordsys.Delta * ch * cs;
+	if(deriv!=NULL) {
+		deriv->dRdu = p.coordsys.Delta * ch * sn;
+		deriv->dRdv = p.coordsys.Delta * sh * cs;
+		deriv->dzdu = p.coordsys.Delta * sh * cs;
+		deriv->dzdv =-p.coordsys.Delta * ch * sn;
+	}
+	if(deriv2!=NULL) {
+		deriv2->d2Rdu2  = R;
+		deriv2->d2Rdv2  =-R;
+		deriv2->d2Rdudv = z;
+		deriv2->d2zdu2  = z;
+		deriv2->d2zdv2  =-z;
+		deriv2->d2zdudv =-R;
+	}
+	return PosCyl(R, z, p.phi);
 }
 
 template<>
@@ -892,6 +979,27 @@ template<> PosVelSph toPosVel(const PosVelCyl& p, const Sph) {
 }
 
 template<>
+PosMomUVSph toPosMom(const PosMomCyl& p, const UVSph& cs) {
+	const PosUVSph pUVSph = toPosDeriv<Cyl, UVSph>(p, cs, NULL);
+	PosDerivT<UVSph, Cyl> derivs;  // need derivs of _inverse_ transformation
+	toPosDeriv<UVSph, Cyl>(pUVSph, &derivs);
+	double pu = derivs.dRdu * p.pR + derivs.dzdu * p.pz;
+	double pv = derivs.dRdv * p.pR + derivs.dzdv * p.pz;
+	double pphi = p.pphi;
+	return PosMomUVSph(pUVSph, MomUVSph(pu, pv, pphi));
+}
+
+template<>
+PosMomCyl toPosMom(const PosMomUVSph& pUVSph) {
+	PosDerivT<UVSph, Cyl> derivs;  // need derivs of transformation
+	const PosCyl p = toPosDeriv<UVSph, Cyl>(pUVSph, &derivs);
+	double det = derivs.dRdu * derivs.dzdv - derivs.dRdv * derivs.dzdu;
+	double pR = (derivs.dzdv * pUVSph.pu - derivs.dzdu * pUVSph.pv)/det;
+	double pz = (derivs.dRdu * pUVSph.pv - derivs.dRdv * pUVSph.pu)/det;
+	return PosMomCyl(p, MomCyl(pR, pz, pUVSph.pphi));
+}
+
+template<>
 PosVelCyl toPosVel(const PosMomSph& p) {
 	double sintheta, costheta;
 	math::sincos(p.theta, sintheta, costheta);
@@ -900,8 +1008,20 @@ PosVelCyl toPosVel(const PosMomSph& p) {
 	const double vz=p.pr*costheta-p.ptheta/p.r*sintheta;
 	return PosVelCyl(R, z, p.phi, vR, vz, p.pphi/(p.r*sintheta));
 }
+template<>
+PosMomSph toPosMom(const PosMomCyl& p) {
+	PosDerivT<Sph, Cyl> derivs;	
+	const PosSph rtheta=toPosSph(p);
+    double snth,csth;
+    math::sincos(rtheta.theta,snth,csth);
+	return PosMomSph(rtheta, MomSph(
+					snth* p.pR + csth* p.pz,
+					rtheta.r*csth * p.pR -rtheta.r*snth * p.pz,
+					p.pphi));
+}
 
-template<> PosMomCyl toPosMom(const PosMomSph& p) {
+template<>
+PosMomCyl toPosMom(const PosMomSph& p) {
     double sintheta, costheta;
     math::sincos(p.theta, sintheta, costheta);
 	const double R  = p.r  * sintheta, z = p.r * costheta;
@@ -919,6 +1039,27 @@ PosMomCar toPosMom(const PosMomCyl& p) {
 template<> PosMomCar toPosMom(const PosMomSph& p) {
 	PosMomCyl pC = toPosMom<Sph,Cyl>(p);
 	return toPosMom<Cyl, Car>(pC);
+}
+
+template<>
+PosVelUVSph toPosVel(const PosVelCyl& from, const UVSph cs) {
+	PosDerivT<Cyl, UVSph> derivs;
+	const PosUVSph puv = toPosDeriv<Cyl, UVSph> (from, cs, &derivs);
+	double udot = derivs.dudR * from.vR + derivs.dudz * from.vz;
+	double vdot     = derivs.dvdR * from.vR + derivs.dvdz * from.vz;
+	double phidot    = from.vphi!=0 ? from.vphi/from.R : 0;
+	return PosVelUVSph(puv, udot, vdot, phidot);
+}
+
+template<>
+PosVelCyl toPosVel(const PosVelUVSph& from, const Cyl) {
+	PosDerivT<UVSph, Cyl> derivs;
+	const PosCyl Rz = toPosDeriv<UVSph, Cyl> (from, &derivs);
+	double vR = derivs.dRdu * from.udot + derivs.dRdv * from.vdot;
+	double vz = derivs.dzdu * from.udot + derivs.dzdv * from.vdot;
+	double vphi = from.phidot!=0 ? from.phidot*Rz.R : 0;
+	const VelCyl vRz(vR,vz,vphi);
+	return PosVelCyl(Rz, vRz);
 }
 
 
@@ -1017,6 +1158,30 @@ template<> PosVelCar toPosVel(const PosVelEls& ps, const Car) {
     double vy = derivs.dydrho*ps.rhodot + derivs.dydchi*ps.chidot+derivs.dydphi*ps.phidot;
     double vz = derivs.dzdrho*ps.rhodot + derivs.dzdchi*ps.chidot+derivs.dzdphi*ps.phidot;
     return PosVelCar(xyz,VelCar(vx,vy,vz));
+}
+
+template<>
+PosVelCyl toPosVel(const PosMomCyl& p) {
+	return PosVelCyl(p.R,p.z,p.phi,p.pR,p.pz,p.pphi/p.R);
+}
+/** trivial conversions */
+template<> inline PosMomCar toPosMom<Car,Car>(const PosMomCar& p) { return p;}
+template<> inline PosMomCyl toPosMom<Cyl,Cyl>(const PosMomCyl& p) { return p;}
+template<> inline PosMomSph toPosMom<Sph,Sph>(const PosMomSph& p) { return p;}
+/* Vel to Mom conversions */
+template<>
+PosMomCar toPosMom(const PosVelCar& p) {
+	return PosMomCar(p.x, p.y, p.z, p.vx, p.vy, p.vz);
+}
+
+template<>
+PosMomCyl toPosMom(const PosVelCyl& p) {
+	return PosMomCyl(p.R, p.z, p.phi, p.vR, p.vz, p.vphi*p.R);
+}
+
+template<>
+PosMomSph toPosMom(const PosVelSph& p) {
+	return PosMomSph(p.r, p.theta, p.phi, p.vr, p.vtheta*p.r, p.vphi*p.r*sin(p.theta));
 }
 
 void PosVelSph::momenta(double& pr, double& ptheta, double& pphi) const

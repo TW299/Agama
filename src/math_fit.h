@@ -75,7 +75,7 @@ void linearMultiFit(const IMatrixDense<double>& coefs, const std::vector<double>
     \return     the number of iterations taken.
 */
 int nonlinearMultiFit(const IFunctionNdimDeriv& F, const double xinit[],
-    const double relToler, const int maxNumIter, double result[]);
+    const double relToler, const int maxNumIter, double result[], double* rms=NULL);
 
 ///@}
 /// \name ------ multidimensional root-finding -------

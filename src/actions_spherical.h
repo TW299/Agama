@@ -83,4 +83,6 @@ private:
 // this class performs the conversion in both directions
 typedef ActionFinderSpherical ActionMapperSpherical;
 
+void mapHJr(const potential::BasePotential &pot,math::QuinticSpline2d& intJr,math::QuinticSpline2d& intE);
+
 }  // namespace actions

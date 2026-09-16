@@ -100,6 +100,10 @@ inline double L_circ(const BasePotential& potential, double E)
 */
 double R_from_Lz(const BasePotential& potential, double Lz);
 
+/** Compute the E of a circular orbit with the given angular momentum
+    in a spherical potential represented by a 1d function */
+double E_circ(const BasePotential& potential, double L, double* _Rc = NULL, double* _Vc = NULL);
+
 /** Compute the radius of a radial orbit in the equatorial plane with the given energy,
     i.e. the root of Phi(R)=E; the potential is axisymmetrized if necessary.
 */
