@@ -4,7 +4,7 @@
 // with C++11 use unordered map as it is faster
 #include <unordered_map>
 #include "math_random.h"
-namespace actions{
+
 namespace{
 struct ActionsHash {
     size_t operator() (const actions::Actions& a) const {
@@ -17,7 +17,7 @@ struct ActionsEqual {
         return lhs.Jr == rhs.Jr && lhs.Jz == rhs.Jz && lhs.Jphi == rhs.Jphi;
     }
 };
-typedef std::unordered_map<actions::Actions, shared_ptr<Torus>, ActionsHash, ActionsEqual>
+typedef std::unordered_map<actions::Actions, shared_ptr<actions::Torus>, ActionsHash, ActionsEqual>
     TorusCache;
 }
 #else
@@ -34,10 +34,10 @@ struct ActionsLess {
     }
 };
 
-typedef std::map<actions::Actions, shared_ptr<Torus>, ActionsLess> TorusCache;
+typedef std::map<Actions, shared_ptr<actions::Torus>, ActionsLess> TorusCache;
 }
 #endif
-
+namespace actions{
 class ActionMapperTorus::Impl {
 public:
     Impl(const potential::BasePotential& pot,const double tol):TG(pot,tol){}
@@ -60,7 +60,8 @@ coord::PosVelCyl ActionMapperTorus::map(const ActionAngles& actAng, Frequencies*
         if(freq!=NULL){
             *freq=T->freqs;
         }
-        return coord::toPosVelCyl(T->from_true(actAng));
+        coord::PosMomCyl dPH=T->from_true(actAng);
+        return coord::toPosVelCyl(dPH);
     }
 }
 }

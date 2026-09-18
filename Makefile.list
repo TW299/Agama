@@ -33,7 +33,6 @@ SOURCES   = interface_c.cpp \
 	    map.cpp\
             actions_factory.cpp \
             actions_focal_distance_finder.cpp \
-            actions_isochrone.cpp \
             actions_spherical.cpp \
             actions_staeckel.cpp \
 	    actions_torusmapper.cpp\

@@ -183,6 +183,9 @@ namespace actions {
 				double b = Rsh / Is.g(Js);
 				double e, f_apo_peri = Is.f(b, Js, e);
 				double c = Is.cob(Js) * b;
+				if(std::isnan(c)||std::isnan(f_apo_peri)){
+					printf("no:%g %g %f\n",Js,b,e);
+				}
 				double F[2];
 				for (int k = -1; k < 2; k += 2) {
 					double u = 1 + k * e;
@@ -192,6 +195,30 @@ namespace actions {
 					F[(k + 1) / 2] = grad.dR;
 				}
 				if (val) *val = f_apo_peri - F[1] / F[0];
+			}
+			virtual unsigned int numDerivs(void) const {
+				return 0;
+			}
+
+		};
+
+		class JsFinder2 : public math::IFunction {
+			const potential::BasePotential& pot;
+			const Iso Is;
+			const double Rsh,R2;
+			double dPhidR;
+		public:
+			JsFinder2(const potential::BasePotential& _pot, const Iso& _Is, const double _Rsh,const double _R2) :
+				pot(_pot), Is(_Is), Rsh(_Rsh),R2(_R2) {
+					coord::GradCyl dPhi;
+					pot.eval(coord::PosCyl(R2,0,0),NULL,&dPhi);
+					dPhidR=dPhi.dR;
+			}
+			virtual void evalDeriv(double Js, double* val, double* deriv = 0, double* deriv2 = 0) const {
+				double b = Rsh / Is.g(Js);
+				double sqr=sqrt(pow_2(b)+pow_2(R2));
+				double M=pow_2(Js)/b;
+				if (val) *val = M/pow_2(b+sqr)*R2/sqr - dPhidR;
 			}
 			virtual unsigned int numDerivs(void) const {
 				return 0;
@@ -595,7 +622,7 @@ namespace actions {
 				// store output
 				freqs.Omegar = dSdJr[0];
 				freqs.Omegaz = dSdJz[0];
-				freqs.Omegaphi = J.Jphi >= 0 ? dSdJphi[0] : -dSdJphi[0];
+				freqs.Omegaphi = dSdJphi[0];
 				dPdJ.resize(numParams);
 				for (unsigned int p = 0; p < numParams; p++) {
 					dPdJ[p].Jr = dSdJr[p + 1];
@@ -618,13 +645,14 @@ namespace actions {
 			math::ScalingInfTh sc;
 			double delta;
 		public:
+			bool fitIso;
 			fitmap(const int _N, const int _Nr, Actions _J, Isochrone _is,
 			       const potential::BasePotential& _pot, double _R0, double _delta)
 				: N(_N), Nr(_Nr), nr(100), nz(100), np(100 * 100),
-				J(_J), is(_is), pot(_pot), sc(_R0), delta(_delta) {
+				J(_J), is(_is), pot(_pot), sc(_R0), delta(_delta),fitIso(false) {
 			}
 			virtual unsigned int numVars() const {
-				return Nr + N;
+				return fitIso?Nr+N+2:Nr + N;
 			}
 			virtual unsigned int numValues() const {
 				return np;
@@ -641,14 +669,23 @@ namespace actions {
 					p[i]=params[i+Nr];
 				}
 				PTIso PT(delta,sc,p,pr);
-				ToyMapIso TMis(is,PT);
+				Isochrone Is2=is;
+				if(fitIso){
+					Is2=Isochrone(pow_2(params[N+Nr]),pow_2(params[N+Nr+1]));
+				}
+				ToyMapIso TMis(Is2,PT);
 				std::vector<coord::PosMomCyl> dRzdP(N+Nr);
-				coord::PosMomCyl Rz=TMis.from_aaT(aaT,NULL,NULL,dHdParams?&dRzdP[0]:NULL,dHdParams?&dRzdP[Nr]:NULL);
+				std::vector<coord::PosMomCyl> dRzdPIs(2);
+				coord::PosMomCyl Rz=TMis.from_aaT(aaT,dHdParams&&fitIso?&dRzdPIs[0]:NULL,NULL,dHdParams?&dRzdP[0]:NULL,dHdParams?&dRzdP[Nr]:NULL);
 				coord::PosMomCyl dHdX;
 				double E=H_dHdX(pot,Rz,dHdX);
 				if(dHdParams){
 					for(int i=0;i<N+Nr;i++){
 						dHdParams[i]=dRzdP[i].R*dHdX.R+dRzdP[i].z*dHdX.z+dRzdP[i].pR*dHdX.pR+dRzdP[i].pz*dHdX.pz;
+					}
+					if(fitIso){
+						dHdParams[N+Nr]=(dRzdPIs[0].R*dHdX.R+dRzdPIs[0].z*dHdX.z+dRzdPIs[0].pR*dHdX.pR+dRzdPIs[0].pz*dHdX.pz)*2*params[N+Nr];
+						dHdParams[N+Nr+1]=(dRzdPIs[1].R*dHdX.R+dRzdPIs[1].z*dHdX.z+dRzdPIs[1].pR*dHdX.pR+dRzdPIs[1].pz*dHdX.pz)*2*params[N+Nr+1];
 					}
 				}
 				return E;
@@ -658,6 +695,7 @@ namespace actions {
 			{
 				std::vector<double>Hval(np);
 				int Nt = N + Nr;
+				if(fitIso)Nt+=2;
 				std::vector<double> dfdparams0(Nt * np);
 				double Hav = 0.0;
 				std::vector<double> dfdav(Nt, 0.0);
@@ -708,15 +746,17 @@ namespace actions {
 				math::ScalingInfTh scz;
 				double delta;
 			public:
+				bool fitHO;
+				bool fitH;
 				fitmapHarm(const int _N, const int _Nr, Actions _J,
 					   HarmonicOscillator _os,
 					   const potential::BasePotential& _pot, double _R0, double _z0, double _delta)
 						: N(_N),Nr(_Nr), N1(_Nr + _N), nr(100), nz(100), np(100 * 100),
-				J(_J), os(_os), pot(_pot), sc(_R0), scz(_z0), delta(_delta)
+				J(_J), os(_os), pot(_pot), sc(_R0), scz(_z0), delta(_delta),fitH(false)
 				{
 				}
 				virtual unsigned int numVars() const {
-					return N1;
+					return fitH?N1+2:N1;
 				}
 				virtual unsigned int numValues() const {
 					return np;
@@ -732,14 +772,21 @@ namespace actions {
 						p[i]=params[i+Nr];
 					}
 					PTHarm PT(delta,sc,scz,p,pr);
-					ToyMapHarm TMH(os,PT);
+					HarmonicOscillator HO=os;
+					if(fitH)HO=HarmonicOscillator(pow_2(params[N1]),pow_2(params[N1+1]));
+					ToyMapHarm TMH(HO,PT);
 					std::vector<coord::PosMomCyl> dRzdP(N+Nr);
-					coord::PosMomCyl Rz=TMH.from_aaT(aaT,NULL,NULL,dHdParams?&dRzdP[0]:NULL,dHdParams?&dRzdP[Nr]:NULL);
+					std::vector<coord::PosMomCyl> dRzdPHO(2);
+					coord::PosMomCyl Rz=TMH.from_aaT(aaT,dHdParams&&fitH?&dRzdPHO[0]:NULL,NULL,dHdParams?&dRzdP[0]:NULL,dHdParams?&dRzdP[Nr]:NULL);
 					coord::PosMomCyl dHdX;
 					double E=H_dHdX(pot,Rz,dHdX);
 					if(dHdParams){
 						for(int i=0;i<N+Nr;i++){
 							dHdParams[i]=dRzdP[i].R*dHdX.R+dRzdP[i].z*dHdX.z+dRzdP[i].pR*dHdX.pR+dRzdP[i].pz*dHdX.pz;
+						}
+						if(fitH){
+							dHdParams[N1]=2*params[N1]*(dRzdPHO[0].R*dHdX.R+dRzdPHO[0].z*dHdX.z+dRzdPHO[0].pR*dHdX.pR+dRzdPHO[0].pz*dHdX.pz);
+							dHdParams[N1+1]=2*params[N1+1]*(dRzdPHO[1].R*dHdX.R+dRzdPHO[1].z*dHdX.z+dRzdPHO[1].pR*dHdX.pR+dRzdPHO[1].pz*dHdX.pz);
 						}
 					}
 					return E;
@@ -748,23 +795,24 @@ namespace actions {
 					double* dH, double* dfdParams)const
 				{
 					std::vector<double>Hval(np);
-					std::vector<double> dfdparams0(N1 * np);
+					int Np=numVars();
+					std::vector<double> dfdparams0(Np * np);
 					double Hav = 0.0;
-					std::vector<double> dfdav(N1, 0.0);
-					std::vector<double> dfdp(N1);
+					std::vector<double> dfdav(Np, 0.0);
+					std::vector<double> dfdp(Np);
 					for (int i = 0;i < np;i++) {
 						double E = H(&params[0], i, &dfdp[0]);
 						Hav += E;
 						Hval[i] = E;
 						if (dfdParams) {
-							for (int j = 0;j < N1;j++) {
-								dfdparams0[i * N1 + j] = dfdp[j];
+							for (int j = 0;j < Np;j++) {
+								dfdparams0[i * Np + j] = dfdp[j];
 								dfdav[j] += dfdp[j];
 							}
 						}
 					}
 					Hav /= np;
-					for (int i = 0;i < N1;i++) {
+					for (int i = 0;i < Np;i++) {
 						dfdav[i] /= np;
 					}
 					if (dH) {
@@ -774,14 +822,13 @@ namespace actions {
 					}
 					if (dfdParams) {
 						for (int i = 0;i < np;i++) {
-							for (int j = 0;j < N1;j++) {
-								dfdParams[i * N1 + j] = (dfdparams0[i * N1 + j] - dfdav[j]);
+							for (int j = 0;j < Np;j++) {
+								dfdParams[i * Np + j] = (dfdparams0[i * Np + j] - dfdav[j]);
 							}
 						}
 					}
 				}
 		};
-
 		//Finds where x lies in xs[]. returns fractional distance from xs[top]
 		double bot_top(const double x, const std::vector<double>& xs,
 			int& top, int& bot) {
@@ -1284,11 +1331,11 @@ namespace actions {
 	TorusGenerator::TorusGenerator(const potential::BasePotential& _pot,
 		const double _tol, std::string _logfname) :
 		pot(_pot), 
+		polInt(potential::PolarInterpolator(_pot)),
+		shInt(potential::ShellInterpolator(_pot)),
 		defaultTol(_tol),
 	    invPhi0(1. / _pot.value(coord::PosCyl(0, 0, 0))),
 	    logfname(_logfname), tmax(250) {
-		polInt=(potential::PtrPolarInterpolator(new potential::PolarInterpolator(pot))); 
-		ShInt=(potential::PtrShellInterpolator(new potential::ShellInterpolator(pot)));
 		FILE* logfile = NULL;
 		if(logfname.size()>0){
 			logfile=fopen(logfname.c_str(), "w");
@@ -1393,11 +1440,11 @@ namespace actions {
 					   double& freqScale, double& Rsh,
 					   double& Hdisp, ToyPotType ToyMapType,
 					   FILE* logfile,
-					  const int Nn0, const int Nnr0) const {
+					  const int Nn0, const int Nnr0,const double tol) const {
 		const double L = fabs(J.Jphi) + J.Jz, Xip=fabs(J.Jphi)/L;
 		const double Jtot = L + J.Jr;
 		Jscale = J.Jr + J.Jz;
-		double Delta; ShInt->getRshDelta(L, Xip, Rsh, Delta);
+		double Delta; shInt.getRshDelta(L, Xip, Rsh, Delta);
 		// Estimate E
 		double Jtot1 = J.Jr + fabs(J.Jphi), Lrel = fabs(J.Jphi)/Jtot1;
 		double scaledE = interpJrE.value(log(Jtot1), Lrel);
@@ -1413,13 +1460,13 @@ namespace actions {
 			double wv2 = 2 * (E-Phi0) + pow_2(J.Jphi / Delta);
 			if (!std::isnan(d2Phi.dz2) && d2Phi.dz2 > 0)
 				wv2 += d2Phi.dz2 * pow_2(Delta);
-			double Jcr = sqrt(wv2) * Delta, k = 0.3;
+			double Jcr = sqrt(wv2) * Delta, k = 0.5;
 			double Jphilow = k * Jcr;
-			if (J.Jphi < Jphilow) {
+			if (abs(J.Jphi) < Jphilow) {
 				//Choose Is unless Jz<Jzcrit & Jr>0
 				if (J.Jr == 0) ToyMapType = ToyPotType::Is;
 				else {
-					double Jzcrit = polInt->getJzcrit(2*J.Jr+J.Jz);
+					double Jzcrit = polInt.getJzcrit(2*J.Jr+J.Jz);
 					ToyMapType = J.Jz>1.1*Jzcrit? ToyPotType::Is :
 						ToyPotType::HO;
 					if (logfile) {
@@ -1437,7 +1484,7 @@ namespace actions {
 		double Rmin, Rmax;
 		potential::findPlanarOrbitExtent(pot, E1, J.Jphi, Rmin, Rmax);
 		freqScale = potential::v_circ(pot, Rsh) / Rsh; //frequency scale set
-		double tolerance = 1e-9;//controls optimisation
+		double tolerance = 1e-6;//controls optimisation
 		PtrToyMap TM;
 		int Nn = Nn0, Nnr = Nnr0;
 		if (ToyMapType == ToyPotType::Is) {
@@ -1446,25 +1493,66 @@ namespace actions {
 			//this matches F_apo_peri in pot we pick Js and b
 			double Rs = 2*(Rmax * (1 - fac) + fac*Rsh);
 			Iso ISO(L, J.Jr);
-			double Jsmax = 1.1 * Jtot, Jsmin = .1 * Jsmax;
+			double Jsmax = 1.1 * Jtot, Jsmin = .5 * Jsmax;
+			coord::GradCyl dPhi;
+			pot.eval(coord::PosCyl(Rsh,0,0),NULL,&dPhi);
+			double sqrtdPhi=sqrt(dPhi.dR);
 			JsFinder JF(pot, ISO,Rsh);
 			double val1, val2;
 			JF.evalDeriv(Jsmin, &val1); JF.evalDeriv(Jsmax, &val2);
-			while (val1 > 0) {
+			double b=Rsh/ISO.g(Jscale);
+			double sqr0=sqrt(pow_2(b)+pow_2(Rsh));
+			double Js0=sqrt(sqr0/Rsh*b)*sqrtdPhi*(b+sqr0);
+			bool err1=false;
+			while (val1 > 0&&!err1) {
 				Jsmin *= .75; JF.evalDeriv(Jsmin, &val1);
+				if(Jsmin<1e-2*Js0)err1=true;
 			}
-			while (val2 < 0) {
+			bool err2=false;
+			while (val2 < 0&&!err2) {
 				Jsmax *= 1.5; JF.evalDeriv(Jsmax, &val2);
+				if(Jsmax>1e2*Js0)err2=true;
 			}
 			const double relToler = 1e-4;
-			double Js_iso = math::findRoot(JF, Jsmin, Jsmax, relToler);
-			double b_iso = Rsh / ISO.g(Js_iso);
-			Isochrone Is(Js_iso,b_iso);
-			//Now choose Fourier coeffs
-			//Nnr=0;
+			double Js_iso,b_iso;
+			if(!err1&&!err2){
+				Js_iso = math::findRoot(JF, Jsmin, Jsmax, relToler);
+				b_iso = Rsh / ISO.g(Js_iso);
+			}else{
+				JsFinder2 JF2(pot,ISO,Rsh,.5*Rs);
+				Js_iso = math::findRoot(JF2, Jsmin, Jsmax, relToler);
+				b_iso = Rsh / ISO.g(Js_iso);
+			}
+			Isochrone Is1(Js_iso,b_iso);
 			std::vector<double> params3(Nnr + Nn, 0);
+			fitmap fm1(Nn, Nnr, J, Is1, pot, Rs, Delta);
+			std::vector<double>dH(fm1.numValues());
+			double sqr=sqrt(pow_2(b_iso)+pow_2(Rsh));
+			double Js_iso2=sqrt(dPhi.dR*pow_2(b_iso+sqr)*sqr/Rsh*b_iso);
+			Isochrone Is2(Js_iso2,b_iso);
+			fitmap fm2(Nn, Nnr, J, Is2, pot, Rs, Delta);
+			Isochrone Is=Is1;
+			double rel1=0,rel2=0;
+			fm1.evalDeriv(&params3[0],&dH[0],NULL);
+			for(int i=0;i<dH.size();i++)rel1+=pow_2(dH[i]);
+			rel1=sqrt(rel1/dH.size());
+			double rel=rel1;
+			fm2.evalDeriv(&params3[0],&dH[0],NULL);
+			for(int i=0;i<dH.size();i++)rel2+=pow_2(dH[i]);
+			rel2=sqrt(rel2/dH.size());
+			if(rel1>rel2&&rel2<0.1*abs(E)){
+				Is=Isochrone(Js_iso2,b_iso);
+				rel=rel2;
+			}
 			fitmap fm(Nn, Nnr, J, Is, pot, Rs, Delta);
-			if(Nnr+Nn>0)math::nonlinearMultiFit(fm, &params3[0], tolerance, 20, &params3[0], &Hdisp);
+			if(rel>3e-2){
+				fm.fitIso=true;
+				params3.resize(Nnr+Nn+2,0);
+				params3[Nnr+Nn]=sqrt(Is.Js);
+				params3[Nnr+Nn+1]=sqrt(Is.b);
+			}
+			bool fitIs=fm.fitIso;
+			if(Nnr+Nn>0&&rel>tol)math::nonlinearMultiFit(fm, &params3[0], tolerance, 20, &params3[0], &Hdisp);
 			std::vector<double> pr(Nnr), p(Nn);
 			for (int i = 0; i < Nnr; i++) {
 				pr[i] = params3[i];
@@ -1476,6 +1564,11 @@ namespace actions {
 				p[i] = params3[i + Nnr];
 				if (logfile && i==0) fprintf(logfile, "paramstheta: %f", p[i]);
 				else if(logfile) fprintf(logfile," %f",p[i]);
+			}
+			if(fitIs){
+				Js_iso=pow_2(params3[Nn+Nnr]);
+				b_iso=pow_2(params3[Nn+Nnr+1]);
+				Is=Isochrone(Js_iso,b_iso);
 			}
 			if (logfile) fprintf(logfile, "\nJs, b: %f %f Delta Rs: %f %f\n",
 				Js_iso, b_iso, Delta, Rs);
@@ -1496,6 +1589,20 @@ namespace actions {
 			fitmapHarm fm(Nn, Nnr, J, os, pot, Rs, Rs, Delta);
 			//now choose Fourier coeffs
 			std::vector<double> params2(Nn + Nnr, 0.0);
+			double res=0;
+			std::vector<double>dH(fm.numValues());
+			for(int i=0;i<dH.size();i++)res+=pow_2(dH[i]);
+			for(int i=0;i<dH.size();i++)res+=pow_2(dH[i]);
+			res=sqrt(res/fm.numValues());
+			if(res>3e-2){
+				fm.fitH=true;
+				params2.resize(Nn+Nnr+2,0);
+				params2[Nn+Nnr]=sqrt(omegaR);
+				params2[Nn+Nnr+1]=sqrt(omegaz);
+			}
+			fm.fitH=false;
+			bool fitHO=fm.fitH;
+			//now choose Fourier coeffs
 			if(Nn+Nnr>0)math::nonlinearMultiFit(fm, &params2[0], tolerance, 20, &params2[0], &Hdisp);
 			std::vector<double> p(Nnr, 0), pzv(Nn, 0);
 			for (int i = 0;i < Nnr;i++) {
@@ -1508,6 +1615,11 @@ namespace actions {
 				pzv[i] = params2[i+Nnr];
 				if (logfile && i==0) fprintf(logfile, "paramsz: %f\n", pzv[i]);
 				else if(logfile) fprintf(logfile," %f",p[i]);
+			}
+			if(fitHO){
+				omegaR=pow_2(params2[Nn+Nnr]);
+				omegaz=pow_2(params2[Nn+Nnr+1]);
+				os=HarmonicOscillator(omegaR,omegaz);
 			}
 			if (logfile) fprintf(logfile, "\nHO freqs: %f %f\n", omegaR, omegaz);
 			math::ScalingInfTh sc(Rs);
@@ -1548,15 +1660,15 @@ namespace actions {
 		double timesr = 3.5, timesz = 3.5;
 		GenFncFit GFF0(indices, timesr, timesz, J);
 		double Jscale, freqScale, Rsh, HdispTM;
+		double tol = defaultTol * tighten;
 		PtrToyMap ptrTM(chooseTM(GFF0, params, J, Jscale, freqScale, Rsh,
-					 HdispTM, ToyMapType, logfile));
+					 HdispTM, ToyMapType, logfile,5,5,tol));
 		if(ptrTM->getToyMapType()==ToyPotType::None){
 			torusFitter TF(J, pot, freqScale, ptrTM, GFF0);
 			for(int i=0; i<params.size(); i++)
 				TF.testit(params,i);
 		}
 		double tolerance = 1e-9;//controls optimisation of the given Sn
-		double tol = defaultTol * tighten;
 		double Hbar, Hdisp = 1e20, Htarget = tol * freqScale * Jscale;
 		bool converged = false;
 		int Loop = 0, MaxLoop = 7, maxNumIter = 20;
@@ -1765,13 +1877,13 @@ namespace actions {
 	double TorusGenerator::getRsh(const Actions& J) const {
 		const double L = J.Jr + J.Jz + fabs(J.Jphi), Xip = fabs(J.Jphi)/L;
 		double Rsh, Delta;
-		ShInt->getRshDelta(L, Xip, Rsh,Delta);
+		shInt.getRshDelta(L, Xip, Rsh,Delta);
 		return Rsh;
 //		return interpR.value(L, (J.Jr + J.Jz) / L);
 	}
 	double TorusGenerator::getDelta(const Actions& J) const {
 		double Rsh, Delta, L = fabs(J.Jphi) + J.Jz, Xip = fabs(J.Jphi) / L;
-		ShInt->getRshDelta(L, Xip, Rsh, Delta);
+		shInt.getRshDelta(L, Xip, Rsh, Delta);
 		return Delta;
 	}
 	std::vector<Torus> TorusGenerator::constE(const double Jrmin, const Actions& Jstart, const int Nsteps) {

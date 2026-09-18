@@ -901,7 +901,6 @@ PosVelCyl toPosVel(const PosMomSph& p) {
 }
 template<>
 PosMomSph toPosMom(const PosMomCyl& p) {
-	PosDerivT<Sph, Cyl> derivs;	
 	const PosSph rtheta=toPosSph(p);
     double snth,csth;
     math::sincos(rtheta.theta,snth,csth);
@@ -1044,14 +1043,52 @@ PosMomCar toPosMom(const PosVelCar& p) {
 }
 
 template<>
+PosMomCar toPosMom(const PosVelCyl& p) {
+    coord::PosVelCar pc=coord::toPosVelCar(p);
+	return PosMomCar(pc.x, pc.y, pc.z, pc.vx, pc.vy, pc.vz);
+}
+
+template<>
+PosMomCar toPosMom(const PosVelSph& p) {
+    coord::PosVelCar pc=coord::toPosVelCar(p);
+	return PosMomCar(pc.x, pc.y, pc.z, pc.vx, pc.vy, pc.vz);
+}
+
+template<>
 PosMomCyl toPosMom(const PosVelCyl& p) {
 	return PosMomCyl(p.R, p.z, p.phi, p.vR, p.vz, p.vphi*p.R);
+}
+
+template<>
+PosMomCyl toPosMom(const PosVelSph& p) {
+    coord::PosVelCyl pc=coord::toPosVelCyl(p);
+	return PosMomCyl(pc.R, pc.z, pc.phi, pc.vR, pc.vz, pc.vphi*pc.R);
+}
+
+template<>
+PosMomCyl toPosMom(const PosVelCar& p) {
+    coord::PosVelCyl pc=coord::toPosVelCyl(p);
+	return PosMomCyl(pc.R, pc.z, pc.phi, pc.vR, pc.vz, pc.vphi*pc.R);
 }
 
 template<>
 PosMomSph toPosMom(const PosVelSph& p) {
 	return PosMomSph(p.r, p.theta, p.phi, p.vr, p.vtheta*p.r, p.vphi*p.r*sin(p.theta));
 }
+
+template<>
+PosMomSph toPosMom(const PosVelCar& p) {
+    coord::PosVelSph pc=coord::toPosVelSph(p);
+	return PosMomSph(pc.r, pc.theta, pc.phi, pc.vr, pc.vtheta*pc.r, pc.vphi*pc.r*sin(pc.theta));
+}
+
+template<>
+PosMomSph toPosMom(const PosVelCyl& p) {
+    coord::PosVelSph pc=coord::toPosVelSph(p);
+	return PosMomSph(pc.r, pc.theta, pc.phi, pc.vr, pc.vtheta*pc.r, pc.vphi*pc.r*sin(pc.theta));
+}
+
+
 
 void PosVelSph::momenta(double& pr, double& ptheta, double& pphi) const
 {

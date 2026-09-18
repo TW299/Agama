@@ -6,7 +6,7 @@
 #include "orbit.h"
 #include "potential_base.h"
 #include "potential_utils.h"
-#define DELTAMIN 1e-4 //smallst permitted focal distance FD = DELTAMIN * Rc
+#define DELTAMIN 0 //smallst permitted focal distance FD = DELTAMIN * Rc
 
 namespace potential{
 /// return scaledE as a function of E and invPhi0 = 1/Phi(0)

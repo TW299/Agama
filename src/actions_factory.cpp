@@ -1,5 +1,5 @@
 #include "actions_factory.h"
-#include "actions_isochrone.h"
+#include "actions_newisochrone.h"
 #include "actions_spherical.h"
 #include "actions_staeckel.h"
 #include "actions_torusmapper.h"

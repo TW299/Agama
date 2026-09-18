@@ -30,7 +30,7 @@ class Is_Horse {
 		coord::PosMomSph  qderiv(double GMx,double bx,double bocx,double cx,double ex,double fratx);
 	public:
 		Is_Horse(const double& _Js, const double& _b) :
-		    Js(_Js), Js2(_Js*_Js), Js4(Js2*Js2), b(_b), b2(_b*_b) {}
+		    Js(_Js), b(_b), Js2(_Js*_Js), Js4(Js2*Js2), b2(_b*_b) {}
 		coord::PosMomSph aa2pq(const ActionAngles&, Frequencies*,
 				       DerivAct<coord::Sph>*, DerivAng<coord::Sph>*);
 		coord::PosMomSph aa2pq(const ActionAngles&, coord::PosMomSph&,
@@ -81,12 +81,12 @@ void Is_Horse::derivs2(double* dlncdJ, double* dedJ, double* detadJ,
 			      double* dudJ, double* dpsidJ, double* dchidJ,
 			  double* drdJ, double* dthdJ, double* dphidJ,
 			  double* dprdJ, double* dpthdJ){
-	double tnpsi = snpsi/cspsi;
+	//double tnpsi = snpsi/cspsi;
 	dthdJ[0] = -sini*cspsi/snth*dpsidJ[0];
 	dthdJ[1] = -snpsi/(L*sini*snth)*pow_2(Jphi/L)
 		   - sini*cspsi/snth*dpsidJ[1];
-	dthdJ[2] = snpsi/(L*sini*snth)*(1-Jphi/L)*(Jphi/L)
-		   - sini*cspsi/snth*dpsidJ[2];
+	dthdJ[2] = snpsi/(L*sini*snth)*(1-abs(Jphi)/L)*(Jphi/L)
+		   - sini*cspsi/snth*dpsidJ[2]*math::sign(Jphi);
 	dpthdJ[0]= L*sini*(snpsi*dpsidJ[0]/snth + cspsi*csth*dthdJ[0]/pow_2(snth));
 	dpthdJ[1]= -cspsi/(snth*sini)
 		   +L*sini*(snpsi*dpsidJ[1]/snth+cspsi*csth*dthdJ[1]/pow_2(snth));
@@ -94,14 +94,16 @@ void Is_Horse::derivs2(double* dlncdJ, double* dedJ, double* detadJ,
 		printf("TM error %f %f %f %f %f %f %f %f\n",pth,L,snpsi,cspsi,dpsidJ[1],csth,snth,dthdJ[1]);
 		exit(0);
 	}
-	dpthdJ[2] = -(1-Jphi/L)*cspsi/(snth*sini)
-		    +L*sini*(snpsi*dpsidJ[2]/snth+cspsi*csth*dthdJ[2]/pow_2(snth));
+	dpthdJ[2] = -(1-abs(Jphi)/L)*cspsi/(snth*sini)*math::sign(Jphi)
+		    +L*sini*(snpsi*dpsidJ[2]/snth*math::sign(Jphi)+cspsi*csth*dthdJ[2]/pow_2(snth));
 	for(int i=0; i<3; i++){
 		drdJ[i]=c*c/r*((u+boc)*dudJ[i]-u*boc*dlncdJ[i])+r*dlncdJ[i];
 		dprdJ[i]=.5*pr*(dlncdJ[i]+boc/(1+boc)*dlncdJ[i]+2/e*dedJ[i]-2/r*drdJ[i])
 			 +Js*sqrt(1/(boc*(1+boc)))*e/r*cseta*detadJ[i];
 		dphidJ[i]=signJphi*dchidJ[i];
 	}
+	drdJ[2]*=math::sign(Jphi);
+	dprdJ[2]*=math::sign(Jphi);
 }
 coord::PosMomSph Is_Horse::aa2pq(const ActionAngles& aa, Frequencies* freqs,
 				    DerivAct<coord::Sph>* dJ, DerivAng<coord::Sph>* dA){
@@ -126,7 +128,7 @@ coord::PosMomSph Is_Horse::aa2pq(const ActionAngles& aa, Frequencies* freqs,
 	if(freqs){
 		freqs->Omegar = Omegar;
 		freqs->Omegaz = Omegaphi;
-		freqs->Omegaphi = Omegaphi;
+		freqs->Omegaphi = math::sign(aa.Jphi)*Omegaphi;
 	}
 	c = Js2/(-2*b*H)-b;
 	boc = b/c;
@@ -151,6 +153,10 @@ coord::PosMomSph Is_Horse::aa2pq(const ActionAngles& aa, Frequencies* freqs,
 	th = acos(csth);
 	coord::PosMomSph p(r, th, phi, pr, pth, aa.Jphi);
 	if(dJ) {// Compute d/dJi
+		if(std::isnan(r+th+phi+pr+pth)){
+			printf("NAN:%f %f %f %f %f\n",r,th,pr,pth);
+			printf("%f %f %f %f %f %f\n",aa.Jr,aa.Jz,aa.Jphi,eta,b,c);
+		}
 		double dlncdJ[3], dedJ[3], detadJ[3], dudJ[3], dpsidJ[3], dchidJ[3];
 		derivs1(dlncdJ, dedJ, detadJ, dudJ, dpsidJ, dchidJ);
 		double drdJ[3], dthdJ[3], dphidJ[3], dprdJ[3], dpthdJ[3];
@@ -254,7 +260,7 @@ ActionAngles Is_Horse::pq2aa(const coord::PosMomSph& p,	Frequencies* freqs) {
 	if(freqs){
 		freqs->Omegar = Omegar;
 		freqs->Omegaz = Omegaphi;
-		freqs->Omegaphi = Omegaphi;
+		freqs->Omegaphi = math::sign(p.pphi)*Omegaphi;
 	}
 	c = Js2/(-2*b*H)-b;
 	boc = b/c;
@@ -320,5 +326,31 @@ Isochrone interpIsochrone(const double x,const Isochrone& Is0,const Isochrone& I
 	const double xp = 1-x;
 	return Isochrone(Is0.Js*x+Is1.Js*xp,Is0.b*x+Is1.b*xp);
 }
+Isochrone IsFromMass(const double mass,const double radius){
+	if(radius<=0)throw std::invalid_argument("radius need to be strictly positive\n");
+	if(mass<0)throw std::invalid_argument("mass need to be positive\n");
+	double Js2=mass*radius;
+	double Js=Js2>0?sqrt(Js2):0;
+	return Isochrone(Js,radius);
+}
+void evalIsochrone(
+    const double isochroneMass, const double isochroneRadius,
+    const coord::PosVelCyl& point,Actions* act,Angles* ang,Frequencies* freq){
+	Isochrone is=IsFromMass(isochroneMass,isochroneRadius);
+	ActionAngles aa=is.pq2aa(coord::toPosMomSph(point),freq);
+	if(act)*act=aa;
+	if(ang)*ang=Angles(math::wrapAngle(aa.thetar),aa.thetaz,aa.thetaphi);
+}
 
+coord::PosVelCyl mapIsochrone(
+    const double isochroneMass, const double isochroneRadius,
+    const ActionAngles& actAng,Frequencies* freq){
+	Isochrone is=IsFromMass(isochroneMass,isochroneRadius);
+	coord::PosVelCyl Rv=coord::toPosVelCyl(is.aa2pq(actAng,freq));
+	return Rv;
+}
+
+std::string ActionMapperIsochrone::name() const{
+	return "Isochrone(mass="+std::to_string(pow_2(iso.Js)/iso.b)+", radius="+std::to_string(iso.b)+")";
+}
 }//namespace actions

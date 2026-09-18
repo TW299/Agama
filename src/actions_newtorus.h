@@ -134,8 +134,10 @@ namespace actions {
 	class TorusGenerator {
 	private:
 		const potential::BasePotential& pot;
-		potential::PtrPolarInterpolator polInt;
-		potential::PtrShellInterpolator ShInt;
+		//potential::PtrPolarInterpolator polInt;
+		//potential::PtrShellInterpolator ShInt;
+		const potential::PolarInterpolator polInt;
+		const potential::ShellInterpolator shInt;
 		const double defaultTol, invPhi0;
 		math::QuinticSpline2d interpJrE;//Esc(Q,Y) for planar orbit, Q=log(Lz+Jr),Y=Lz/(Lz+Jr). Esc=log(1/Phi(0)-1/E)
 		std::string logfname;
@@ -155,13 +157,13 @@ namespace actions {
 		/* Creator of tori in given potential. GF deemed ok if
 		 * dispersion in H < tol*freqScale*Jtotal */
 		TorusGenerator(const potential::BasePotential& _pot,
-			       const double _tol = 1e-9, std::string _logfname = "");
+			       const double _tol = 1e-5, std::string _logfname = "");
 		/* Fit toy map with as default 5 Fourier terms in each
 		 * coord*/ 
 		PtrToyMap chooseTM(GenFncFit&, std::vector<double>&, const Actions&,
 				   double&, double&, double&, double&,
 				   ToyPotType ToyMapType=ToyPotType::None,
-				   FILE* logfile = NULL, const int Nn=5, const int Nnr=5) const;
+				   FILE* logfile = NULL, const int Nn=5, const int Nnr=5,const double tol=0) const;
 		Torus fitTorus(const Actions& J, const double tighten = 1,
 			       const ToyPotType ToyMapType=ToyPotType::None) const;
 		/* Use point trans that has no Fourier series */

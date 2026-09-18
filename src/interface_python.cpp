@@ -4247,13 +4247,11 @@ public:
         bool typeerror  = false;
         npy_intp dims[] = { (npy_intp)npoints, 3};
         PyObjectRef args(PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, act));
-        PyObjectRef kw(PyDict_New());
-        if(Jzcrit){
-            npy_intp dimsn[] = { (npy_intp)npoints};
-            PyDict_SetItemString(kw,"Jzcrit",PyArray_SimpleNewFromData(1,dimsn,NPY_DOUBLE,Jzc));
-        }
+        //npy_intp dimsn[] = { (npy_intp)npoints};
+        //PyDict_SetItemString(kw,"Jzcrit",PyArray_SimpleNewFromData(1,dimsn,NPY_DOUBLE,Jzc));
         PyObject *result = NULL, *result_der = NULL;
         if(deriv) {
+            PyObjectRef kw(PyDict_New());
             PyDict_SetItemString(kw, "der", Py_True);
             PyObjectRef tup(PyObject_Call(fnc,
                 PyObjectRef(Py_BuildValue("(O)", (PyObject*)args)),
@@ -4271,6 +4269,7 @@ public:
             }
         } else
             result = PyObject_CallFunctionObjArgs(fnc, (PyObject*)args, /*end args*/ NULL);
+            //PyObject_CallFunctionObjArgs(fnc, (PyObject*)args, /*end args*/ NULL);
 
         // parse and unit-convert the returned array of DF values
         if(result == NULL) {
@@ -4865,7 +4864,7 @@ static const char* docstringGalaxyModel =
     "  df - a DistributionFunction object.\n"
     "  af (optional) - an ActionFinder object - must be constructed for the same potential; "
     "if not provided, then the action finder is created internally.\n"
-    "  PolInterp (optional) - a PolarInterpolator object constructed in the same potential;\n"
+    "  polInterp (optional) - a PolarInterpolator object constructed in the same potential;\n"
     "  sf (optional) - a SelectionFunction object or a user-defined callable function "
     "that takes a 2d Nx6 array of phase-space points (x,v in cartesian coordinates) as input, "
     "and returns a 1d array of N values between 0 and 1, which will be multiplied by the values "
@@ -4922,9 +4921,9 @@ int GalaxyModel_init(GalaxyModelObject* self, PyObject* args, PyObject* namedArg
         PyErr_SetString(PyExc_RuntimeError, "GalaxyModel object cannot be reinitialized");
         return -1;
     }
-    static const char* keywords[] = {"potential", "df", "af", "sf", NULL};
+    static const char* keywords[] = {"potential", "df", "af","polInterp", "sf", NULL};
     PyObject *pot_obj = NULL, *df_obj = NULL, *af_obj = NULL, *polint_obj=NULL, *sf_obj = NULL;
-    if(!PyArg_ParseTupleAndKeywords(args, namedArgs, "OO|OO", const_cast<char**>(keywords),
+    if(!PyArg_ParseTupleAndKeywords(args, namedArgs, "OO|OOO", const_cast<char**>(keywords),
         &pot_obj, &df_obj, &af_obj,&polint_obj, &sf_obj))
     {
         return -1;

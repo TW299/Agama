@@ -28,16 +28,17 @@ namespace actions {
 			math::sign(aa.Jphi) * atan(K * tan(aa.thetar / 2));
 		if (aa.Jphi == 0 && aa.thetar > M_PI)phi += M_PI;
 		coord::PosMomCyl xpcyl(R, z, phi, pR, pz, aa.Jphi);
-		if (freqs)*freqs = Frequencies(2. * omegaR, omegaz, omegaR);
+		if (freqs)*freqs = Frequencies(2. * omegaR, omegaz, math::sign(aa.Jphi)*omegaR);
 		if (dJ || dA) {
 			double dedJr = pow_2(aa.Jphi) / (sqrt(aa.Jr * (aa.Jr + fabs(aa.Jphi))) * J1 * J1);
 			double dedJphi = -aa.Jphi * sqrt(aa.Jr) / (sqrt(aa.Jr + fabs(aa.Jphi)) * pow_2(J1));
 			double dzdJz = .5 * z / aa.Jz;double dpzdJz = .5 * pz / aa.Jz;
 			double dRdJr = aa.Jphi == 0 ? R / J1 : R / J1 - .5 * J1 / omegaR * dedJr * cos(aa.thetar) / R;
 			double dpRdJr = aa.Jphi == 0 ? pR / J1 : 2 * pR / J1 + dedJr * J1 * sin(aa.thetar) / R - pR / R * dRdJr;
-			double dRdJphi = aa.Jphi == 0 ? .5 * R / J1 : .5 * R / J1 - .5 * J1 / omegaR * dedJphi * cos(aa.thetar) / R;
+			int signJphi=math::sign(aa.Jphi);
+			double dRdJphi = aa.Jphi == 0 ? .5 * R / J1 : .5 * R / J1 * signJphi - .5 * J1 / omegaR * dedJphi * cos(aa.thetar) / R;
 			double dpRdJphi = aa.Jphi == 0 ? .5 * pR / J1 :
-				pR / J1 + dedJphi * J1 * sin(aa.thetar) / R - pR / R * dRdJphi;
+				pR / J1 * signJphi + dedJphi * J1 * sin(aa.thetar) / R - pR / R * dRdJphi;
 			double dzdthetaz = pz / omegaz;
 			double dRdthetar = pR / (2 * omegaR);
 			double K1 = -pow_2(omegaR) * R;
@@ -101,7 +102,7 @@ namespace actions {
 		double x = sqrt(4 * aa.Jr / omegaR) * sin(aa.thetar / 2);
 		double px = sqrt(4 * aa.Jr * omegaR) * cos(aa.thetar / 2);
 		coord::PosMomCar xpcar(x, 0.0, z, px, 0.0, pz);
-		if (freqs)*freqs = Frequencies(2. * omegaR, omegaz, omegaR);
+		if (freqs)*freqs = Frequencies(2. * omegaR, omegaz,  math::sign(aa.Jphi)*omegaR);
 		if (dJ || dA) {
 			double dzdJz = .5 * z / aa.Jz;double dpzdJz = .5 * pz / aa.Jz;
 			double dxdJr = .5 * x / aa.Jr;

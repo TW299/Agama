@@ -184,18 +184,18 @@ actions::Actions BoxLoopTrAct(const potential::BasePotential& pot, double E) {
 	double Rmax, pRm;
 	double Jr = Area(R, pR, Rmax, pRm) / M_PI;
 	double v1 = sqrt(2*(E-pot.value(coord::PosCyl(Rmax,0,0))));
-	if(pRm/v1>0.8){//From Rmax to Rmax0 approx motion as on x axis 
+	if(pRm/v1>0.8||R.size()<3||abs(Rmax)<10*x0){//From Rmax to Rmax0 approx motion as on x axis 
 		pxf pxfunc(pot,E);
 		Jr+=math::integrateGK(math::ScaledIntegrand<math::ScalingCub>
-				      (math::ScalingCub(Rmax, Rmax0), pxfunc), 0, 1, 1e-6)/M_PI;
+				      (math::ScalingCub(Rmax, Rmax0), pxfunc), 0, 1, 1e-8)/M_PI;
 	}
 	//Get Jfast=Jx+Jz=2*Jr+Jz from motion along the z axis
 	double Jfast = 2 * math::integrateGK(math::ScaledIntegrand<math::ScalingCub>
-					     (math::ScalingCub(0, zmax), pzt), 0, 1, 1e-6) / M_PI;
+					     (math::ScalingCub(0, zmax), pzt), 0, 1, 1e-8) / M_PI;
 	double Jz = Jfast - 2 * Jr;
 	if(Jz<0){
-		Jz=Jfast;
-		Jr=0;
+		Jz=0;
+		Jr=.5*Jfast;
 	}
 	return actions::Actions(Jr, Jz, 0);
 }
@@ -389,7 +389,6 @@ void isMonotone(std::vector<double> x){
 }
 ShellInterpolator::ShellInterpolator(const BasePotential& pot,
 					 const std::string logfname){
-	printf("Initialising the potential...");
 	FILE* logfile = NULL;
 	if(logfname.size()>0){
 		logfile=fopen(logfname.c_str(), "w");
@@ -444,7 +443,7 @@ ShellInterpolator::ShellInterpolator(const BasePotential& pot,
 				double Rsh, FD0 = estimateFocalDistanceShellOrbit
 					(pot, E, Jphi, &Rsh, &Jz, &shell);
 				//printf("FD:%f\n",FD0);
-				double FD = fmax(DELTAMIN*Rc, FD0);
+				double FD = FD0;
 				//if(iXi==0) writeShell(iE,Rsh,FD0,shell);
 				grid2dDE(iE, iXi) = FD;
 				grid2dRE(iE, iXi) = Rsh / Rc;
@@ -534,21 +533,19 @@ PolarInterpolator::PolarInterpolator(const potential::BasePotential& pot){
 		gridEscaled[i] = scaleE(gridE[i], 1/Phi0);
 	}
 	math::ScalingSemiInf Sc;
-	std::vector<double> gridJr(sizeE), gridJz(sizeE), gridJfScaled(sizeE);
+	std::vector<double> gridJz(sizeE), gridJfScaled(sizeE);
 	//gridI3, gridFD, gridUmin;
 	if (potential::isSpherical(pot)|| std::isnan(Phi0) || std::isinf(Phi0)) {
-		double Jr0 = 0;
-		printf("spherical\n");
+		double fac=sizeE<=1?1:1/((double)(sizeE-1));
 		for (int i = 0; i < sizeE; i++) {
-			gridJr[i] = Jr0;
 			gridJz[i] = 0;
 			/*gridFD.push_back(0);
 			gridI3.push_back(0);//change this
 			//*/
-			gridJfScaled[i]=scale(Sc,2*Jr0);
-			Jr0 += 1.;
+			gridJfScaled[i]=i*fac;
 		}
 	} else {
+		std::vector<double> gridJr(sizeE);
 		int N = 7;//number of points to be fitted
 		bool fitted = false;//gets if fitted straight point in E,z1 plane
 		bool interp = false;
@@ -604,8 +601,11 @@ PolarInterpolator::PolarInterpolator(const potential::BasePotential& pot){
 						int j1 = index + j - N + 2;
 						pzf pzfunc(pot,gridE[j1]);
 						double z=z0+b*(gridE[j1]-E0);
+						if(z>zmaxs[j])z=zmaxs[j];
+						if(z<0)z=0;
+						double gridJf=2*gridJr[j1]+gridJz[j1];
 						gridJz[j1]=2*math::integrateGK(pzfunc,0,z,1e-8)/M_PI;
-						gridJr[j1]=math::integrateGK(pzfunc,z,zmaxs[j],1e-8)/M_PI;
+						gridJr[j1]=.5*(gridJf-gridJz[j1]);
 					}
 					fitted = true;
 					i--;
@@ -656,7 +656,7 @@ PolarInterpolator::PolarInterpolator(const potential::BasePotential& pot){
 			shell->push_back(traj[i].first);
 	}
 	
-#define OLD_METHOD 1
+//#define OLD_METHOD 1
 #ifdef OLD_METHOD
 	/*if(traj.size() >= 2){
 	// now find the best-fit value of delta for this orbit
