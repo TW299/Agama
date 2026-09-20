@@ -149,12 +149,13 @@ void sort(std::vector<double>& x, std::vector<double>& y) {
 // transition. On return biggest values of x and y in x2max & y2max
 // and in ysh the y-value of the curve when x=Rsh
 double Area(std::vector<double> x, std::vector<double> y,
-	    double& x2max, double& ymv2) {
+	    double& x2max, double& ymv2,double& dev) {
 	std::vector<double> xn, yn;
 	for (int i = 0; i < x.size(); i++) {//Assume 4-fold symmetry
 		xn.push_back(fabs(x[i])); yn.push_back(fabs(y[i]));
 	}
 	sort(xn, yn);
+	dev=yn[x.size()-1]-yn[0];
 	int n = yn.size();
 	double I = yn[0] * (xn[1] - xn[0])
 		   + yn[n - 1] * (xn[n - 1] - xn[n - 2]);
@@ -182,9 +183,10 @@ actions::Actions BoxLoopTrAct(const potential::BasePotential& pot, double E) {
 	std::vector<double> R, pR;
 	orbit::makeSoS(xv0, pot, R, pR, 1000);
 	double Rmax, pRm;
-	double Jr = Area(R, pR, Rmax, pRm) / M_PI;
+	double dev=0;
+	double Jr = Area(R, pR, Rmax, pRm,dev) / M_PI;
 	double v1 = sqrt(2*(E-pot.value(coord::PosCyl(Rmax,0,0))));
-	if(pRm/v1>0.8||R.size()<3||abs(Rmax)<10*x0){//From Rmax to Rmax0 approx motion as on x axis 
+	if(pRm/v1>0.8||R.size()<3||dev<0.5*x0){//From Rmax to Rmax0 approx motion as on x axis 
 		pxf pxfunc(pot,E);
 		Jr+=math::integrateGK(math::ScaledIntegrand<math::ScalingCub>
 				      (math::ScalingCub(Rmax, Rmax0), pxfunc), 0, 1, 1e-8)/M_PI;
