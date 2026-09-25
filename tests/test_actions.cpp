@@ -9,7 +9,7 @@
 #include "potential_perfect_ellipsoid.h"
 #include "galaxymodel_base.h"
 #include "orbit.h"
-#include "map.h"
+#include "actions_toymap.h"
 //#include <Eigen/Dense>
 #include <variant>
 #include <random>

@@ -35,7 +35,7 @@ void eval(
     \return  an instance of action finder.
     \throw   std::invalid_argument exception if the potential is not suitable (non-axisymmetric).
 */
-actions::PtrActionFinder createActionFinder(
+PtrActionFinder createActionFinder(
     const potential::PtrPotential& potential,
     bool interpolate=false);
 
@@ -45,6 +45,6 @@ actions::PtrActionFinder createActionFinder(
     \return  an instance of action mapper.
     \throw   std::invalid_argument exception if the potential is not suitable (non-axisymmetric).
 */
-actions::PtrActionMapper createActionMapper(const potential::PtrPotential& potential, double tol=NAN);
+PtrActionMapper createActionMapper(const potential::PtrPotential& potential, double tol=NAN);
 
 }  // namespace actions

@@ -1540,17 +1540,18 @@ namespace actions {
 			fm2.evalDeriv(&params3[0],&dH[0],NULL);
 			for(int i=0;i<dH.size();i++)rel2+=pow_2(dH[i]);
 			rel2=sqrt(rel2/dH.size());
-			if(rel1>rel2&&rel2<0.1*abs(E)){
+			if(rel1>rel2&&rel2<1e-4){
 				Is=Isochrone(Js_iso2,b_iso);
 				rel=rel2;
 			}
 			fitmap fm(Nn, Nnr, J, Is, pot, Rs, Delta);
-			if(rel>3e-2){
+			if(err1||err2){
 				fm.fitIso=true;
 				params3.resize(Nnr+Nn+2,0);
 				params3[Nnr+Nn]=sqrt(Is.Js);
 				params3[Nnr+Nn+1]=sqrt(Is.b);
 			}
+			//*/
 			bool fitIs=fm.fitIso;
 			if(Nnr+Nn>0&&rel>tol)math::nonlinearMultiFit(fm, &params3[0], tolerance, 20, &params3[0], &Hdisp);
 			std::vector<double> pr(Nnr), p(Nn);
@@ -1653,7 +1654,7 @@ namespace actions {
 			logfile=fopen(logfname.c_str(), "a");
 			fprintf(logfile, "\nStarting on actions (%f %f %f)\n", J.Jr, J.Jz, J.Jphi);
 		}
-		int nrmax = 10, nzmax = 4;// nzmax must be even
+		int nrmax = 8, nzmax = 6;// nzmax must be even
 		GenFncIndices indices = makeGridIndices(nrmax, nzmax);
 		std::vector<double> params(indices.size(), 0);
 		//double timesr = 1.5, timesz = 1.5;

@@ -30,11 +30,12 @@ SOURCES   = interface_c.cpp \
 	    actions_newisochrone.cpp\
 	    actions_harmonicoscillator.cpp\
 	    actions_newgenfnc.cpp\
-	    map.cpp\
+	    actions_toymap.cpp \
             actions_factory.cpp \
             actions_focal_distance_finder.cpp \
             actions_spherical.cpp \
             actions_staeckel.cpp \
+	    actions_staeckel3d.cpp \
 	    actions_torusmapper.cpp\
             coord.cpp \
             df_base.cpp \
@@ -64,6 +65,7 @@ SOURCES   = interface_c.cpp \
             potential_king.cpp \
             potential_multipole.cpp \
             potential_perfect_ellipsoid.cpp \
+            potential_perfect_ellipsoid_triaxial.cpp \
             potential_spheroid.cpp \
             potential_utils.cpp \
             raga_core.cpp \

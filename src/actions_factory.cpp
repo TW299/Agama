@@ -2,9 +2,11 @@
 #include "actions_newisochrone.h"
 #include "actions_spherical.h"
 #include "actions_staeckel.h"
+#include "actions_staeckel3d.h"
 #include "actions_torusmapper.h"
 #include "potential_analytic.h"
 #include "potential_perfect_ellipsoid.h"
+#include "potential_perfect_ellipsoid_triaxial.h"
 
 namespace actions {
 
@@ -39,17 +41,22 @@ PtrActionFinder createActionFinder(const potential::PtrPotential& pot, bool inte
         return PtrActionFinder(new ActionFinderIsochrone(potIso->totalMass(), potIso->getRadius()));
 
     if(isSpherical(*pot))
-       return PtrActionFinder(new actions::ActionFinderSpherical(*pot));
+       return PtrActionFinder(new ActionFinderSpherical(*pot));
 
 #if __cplusplus >= 201103L   // aliasing constructor for shared pointers only works in C++11
     const potential::OblatePerfectEllipsoid* potPE =
         dynamic_cast<const potential::OblatePerfectEllipsoid*>(pot.get());
     if(potPE)
-        return PtrActionFinder(new actions::ActionFinderAxisymStaeckel(
+        return PtrActionFinder(new ActionFinderAxisymStaeckel(
             potential::PtrOblatePerfectEllipsoid(pot, potPE)));
+    const potential::PerfectEllipsoidTriaxial* potTri =
+        dynamic_cast<const potential::PerfectEllipsoidTriaxial*>(pot.get());
+    if(potTri)
+        return PtrActionFinder(new ActionFinderTriaxialStaeckel(
+            potential::PtrPerfectEllipsoidTriaxial(pot, potTri)));
 #endif
-
-    return PtrActionFinder(new actions::ActionFinderAxisymFudge(pot, interpolate));
+             
+    return PtrActionFinder(new ActionFinderAxisymFudge(pot, interpolate));
 }
 
 PtrActionMapper createActionMapper(const potential::PtrPotential& pot, double tol)
@@ -59,12 +66,12 @@ PtrActionMapper createActionMapper(const potential::PtrPotential& pot, double to
         return PtrActionMapper(new ActionMapperIsochrone(potIso->totalMass(), potIso->getRadius()));
 
     if(isSpherical(*pot))
-        return PtrActionMapper(new actions::ActionMapperSpherical(*pot));
+        return PtrActionMapper(new ActionMapperSpherical(*pot));
 
     if(tol==tol)  // non-default value for tol
-        return PtrActionMapper(new actions::ActionMapperTorus(*pot, tol));
+        return PtrActionMapper(new ActionMapperTorus(*pot, tol));
     else
-        return PtrActionMapper(new actions::ActionMapperTorus(*pot /*, default_value_for_tol */));
+        return PtrActionMapper(new ActionMapperTorus(*pot /*, default_value_for_tol */));
 }
 
 }  // namespace actions

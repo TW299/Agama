@@ -1,7 +1,7 @@
 /* Stuff to do with toy maps, ie combinatons of an HJ map and a point
  * map
  */
-#include "map.h"
+#include "actions_toymap.h"
 namespace actions{
     namespace{
         //function used to invert v(theta) to get theta(v)

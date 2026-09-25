@@ -85,8 +85,8 @@ void DoublePowerLaw::evalDeriv(const actions::Actions &J,
 {
     double
     signJphi    = J.Jphi>=0 ? 1 : -1,
-    coefJphiIn  = (3-par.coefJrIn -par.coefJzIn)  * signJphi,
-    coefJphiOut = (3-par.coefJrOut-par.coefJzOut) * signJphi,
+    coefJphiIn  = signJphi,//(3-par.coefJrIn -par.coefJzIn)  * signJphi,
+    coefJphiOut = signJphi,//(3-par.coefJrOut-par.coefJzOut) * signJphi,
     // linear combination of actions in the inner part of the model (for J<~J0)
     h = par.coefJrIn * J.Jr + par.coefJzIn * J.Jz + coefJphiIn * J.Jphi,
     // linear combination of actions in the outer part of the model (for J>~J0)

@@ -1,5 +1,5 @@
 #pragma once
-#include "map.h"
+#include "actions_toymap.h"
 #include "actions_base.h"
 #include "actions_staeckel.h"
 #include "actions_newgenfnc.h"

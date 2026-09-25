@@ -186,7 +186,7 @@ actions::Actions BoxLoopTrAct(const potential::BasePotential& pot, double E) {
 	double dev=0;
 	double Jr = Area(R, pR, Rmax, pRm,dev) / M_PI;
 	double v1 = sqrt(2*(E-pot.value(coord::PosCyl(Rmax,0,0))));
-	if(pRm/v1>0.8||R.size()<3||dev<0.5*x0){//From Rmax to Rmax0 approx motion as on x axis 
+	if(pRm/v1>0.8||R.size()<3){//From Rmax to Rmax0 approx motion as on x axis 
 		pxf pxfunc(pot,E);
 		Jr+=math::integrateGK(math::ScaledIntegrand<math::ScalingCub>
 				      (math::ScalingCub(Rmax, Rmax0), pxfunc), 0, 1, 1e-8)/M_PI;

@@ -8,6 +8,7 @@
 #include "potential_king.h"
 #include "potential_multipole.h"
 #include "potential_perfect_ellipsoid.h"
+#include "potential_perfect_ellipsoid_triaxial.h"
 #include "potential_spheroid.h"
 #include "particles_io.h"
 #include "math_core.h"
@@ -205,6 +206,7 @@ PotentialType getPotentialTypeByName(const std::string& name)
     if(utils::stringsEqual(name, Evolving     ::myName())) return PT_EVOLVING;
     if(utils::stringsEqual(name, UniformAcceleration     ::myName())) return PT_UNIFORMACCELERATION;
     if(utils::stringsEqual(name, PerfectEllipsoid        ::myName())) return PT_PERFECTELLIPSOID;
+    if(utils::stringsEqual(name, PerfectEllipsoidTriaxial::myName())) return PT_PERFECTELLIPSOID;
     if(utils::stringsEqual(name, DensitySphericalHarmonic::myName())) return PT_DENS_SPHHARM;
     if(utils::stringsEqual(name, DensityAzimuthalHarmonic::myName())) return PT_DENS_CYLGRID;
     return PT_INVALID;
@@ -376,7 +378,7 @@ AllParam parseParam(const utils::KeyValueMap& kvmap, const units::ExternalUnits&
         type & PT_HARMONIC),
         conv.velocityUnit / conv.lengthUnit);
     assignParam(param.axisRatioY,          popString(kvmap, keys, "axisRatioY", "p",
-        type & (PT_SPHEROID | PT_NUKER | PT_SERSIC | PT_LOG | PT_HARMONIC | PT_DEHNEN | PT_FERRERS)));
+        type & (PT_SPHEROID | PT_NUKER | PT_SERSIC | PT_LOG | PT_HARMONIC | PT_DEHNEN | PT_FERRERS | PT_PERFECTELLIPSOID)));
     assignParam(param.axisRatioZ,          popString(kvmap, keys, "axisRatioZ", "q",
         type & (PT_SPHEROID | PT_NUKER | PT_SERSIC | PT_LOG | PT_HARMONIC | PT_DEHNEN | PT_FERRERS |
         PT_PERFECTELLIPSOID)));
@@ -1315,7 +1317,8 @@ PtrPotential createAnalyticPotential(const AllParam& param)
             return PtrPotential(new PerfectEllipsoid(
                 param.mass, param.scaleRadius, param.scaleRadius*param.axisRatioZ)); 
         else
-            throw std::invalid_argument("Non-axisymmetric Perfect Ellipsoid is not supported");
+            return PtrPotential(new PerfectEllipsoidTriaxial(
+                param.mass, param.scaleRadius, param.scaleRadius*param.axisRatioY, param.scaleRadius*param.axisRatioZ));
     case PT_KING:
         return createKingPotential(param.mass, param.scaleRadius, param.W0, param.trunc);
     case PT_LONGMURALI:
