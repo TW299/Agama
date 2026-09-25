@@ -1,7 +1,10 @@
 This is a fork of the AGAMA library by E. Vasiliev for galaxy modelling found here: https://github.com/GalacticDynamics-Oxford/Agama.git
 
-It differs from the AGAMA library by including the torus mapping and getting box loop transitions from AGAMAB by J. Binney found here: https://github.com/binneyox/AGAMAb.git. It is mostly just a copy of the code there with some differences in the potential_interpolators.cpp.
+It differs from the AGAMA library by including the torus mapping and getting box loop transitions from AGAMAB 
+by J. Binney found here: https://github.com/binneyox/AGAMAb.git. It is mostly just a copy of the code there with some differences in the potential_interpolators.cpp.
 Also I have used some of the code for the distribution function and obs class.
 
-Also it includes some code written by me of potential_perfect_ellipsoid_triaxial which allows the perfect ellipsoid potential to be triaxial and not just axisymmetric. Also actions_staeckel3d is code that allows one to find the actions in a general perfect potential (not neccesarily axisymmetric. It will however work if you have an axisymmetric potential a=b. 
+Also it includes some code written by me of potential_perfect_ellipsoid_triaxial which allows the perfect ellipsoid potential to be triaxial and not just axisymmetric.
+Also actions_staeckel3d is code that allows one to find the actions in a general perfect potential (not neccesarily axisymmetric.
+It will however work if you have an axisymmetric potential a=b. 
 
