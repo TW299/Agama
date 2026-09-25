@@ -1,23 +1,7 @@
-This is the AGAMA library for galaxy modelling.
+This is a fork of the AGAMA library by E. Vasiliev for galaxy modelling found here: https://github.com/GalacticDynamics-Oxford/Agama.git
 
-Its main tasks include:
+It differs from the AGAMA library by including the torus mapping and getting box loop transitions from AGAMAB by J. Binney found here: https://github.com/binneyox/AGAMAb.git. It is mostly just a copy of the code there with some differences in the potential_interpolators.cpp.
+Also I have used some of the code for the distribution function and obs class.
 
-  - Computation of gravitational potential and forces;
-  - Orbit integration and analysis;
-  - Conversion between position/velocity and action/angle coordinates;
-  - Distribution functions (DFs) and their moments;
-  - DF-based self-consistent multi-component galaxy models;
-  - Schwarzschild orbit-superposition models;
-  - Framework for finding best-fit parameters of a model from data;
-  - Auxiliary utilities (e.g., various mathematical routines).
+Also it includes some code written by me of potential_perfect_ellipsoid_triaxial which allows the perfect ellipsoid potential to be triaxial and not just axisymmetric. Also actions_staeckel3d is code that allows one to find the actions in a general perfect potential (not neccesarily axisymmetric. It will however work if you have an axisymmetric potential a=b. 
 
-The stellar-dynamical Monte Carlo code Raga, the Fokker--Planck code PhaseFlow,
-and the Schwarzschild modelling code Forstand are included in the Agama distribution.
-The core of the library is written in C++, and there are Python and Fortran interfaces;
-it may be used as a plugin for other stellar-dynamical software packages:
-amuse, gala, galpy, nemo.
-
-A detailed documentation for the AGAMA library is presented in a separate file doc/reference.pdf,
-and a more technical description may be extracted from source files with Doxygen.
-Instructions for compilation are in the file INSTALL.
-The package also contains collection of examples and test programs both in C++ and Python.
