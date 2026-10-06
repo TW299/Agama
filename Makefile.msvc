@@ -11,8 +11,6 @@ LIBNAME_SHARED = agama.pyd
 LIBNAME_STATIC = agama.lib
 OBJECTS = $(SOURCES:.cpp=.obj)
 OBJECTS = obj/$(OBJECTS:  = obj/)
-TORUSOBJ= $(TORUSSRC:.cc=.obj)
-TORUSOBJ= obj/$(TORUSOBJ:  = obj/)
 TESTEXE = $(TESTSRCS:.cpp=.exe)
 TESTEXE = exe/$(TESTEXE:  = exe/)
 COMPILE_FLAGS_ALL = $(COMPILE_FLAGS_ALL) -I$(SRCDIR)
@@ -23,20 +21,17 @@ all:  $(OBJDIR) $(EXEDIR) lib $(TESTEXE)
 # one may recompile just the library by running 'make lib'
 lib:  $(LIBNAME_STATIC) $(LIBNAME_SHARED)
 
-$(LIBNAME_STATIC):  $(OBJECTS) $(TORUSOBJ) Makefile.msvc Makefile.local Makefile.list
-	lib.exe $(OBJECTS) $(TORUSOBJ) /out:$(LIBNAME_STATIC)
+$(LIBNAME_STATIC):  $(OBJECTS) Makefile.msvc Makefile.local Makefile.list
+	lib.exe $(OBJECTS) /out:$(LIBNAME_STATIC)
 
-$(LIBNAME_SHARED):  $(OBJECTS) $(TORUSOBJ) Makefile.msvc Makefile.local Makefile.list
-	link.exe $(OBJECTS) $(TORUSOBJ) $(LINK_FLAGS_ALL) $(LINK_FLAGS_LIB) $(LINK_FLAGS_LIB_AND_EXE_STATIC) /dll /out:$(LIBNAME_SHARED) /implib:agama_pyd.lib
+$(LIBNAME_SHARED):  $(OBJECTS) Makefile.msvc Makefile.local Makefile.list
+	link.exe $(OBJECTS) $(LINK_FLAGS_ALL) $(LINK_FLAGS_LIB) $(LINK_FLAGS_LIB_AND_EXE_STATIC) /dll /out:$(LIBNAME_SHARED) /implib:agama_pyd.lib
 	del agama_pyd.lib
 	del agama_pyd.exp
 
 $(TESTEXE): $(LIBNAME_STATIC) Makefile.local
 
 {src}.cpp{obj}.obj:
-	$(CC) $(COMPILE_FLAGS_ALL) $(COMPILE_FLAGS_LIB) -c $< -Foobj/
-
-{src/torus}.cc{obj}.obj:
 	$(CC) $(COMPILE_FLAGS_ALL) $(COMPILE_FLAGS_LIB) -c $< -Foobj/
 
 # statically link against agama.lib

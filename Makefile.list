@@ -5,7 +5,6 @@ SRCDIR    = src
 OBJDIR    = obj
 EXEDIR    = exe
 TESTSDIR  = tests
-TORUSDIR  = src/torus
 
 # sources of the main library
 SOURCES   = interface_c.cpp \
@@ -86,5 +85,5 @@ TESTSRCS  = test_galaxymodel.cpp \
             example_self_consistent_model.cpp \
             example_self_consistent_model_mw.cpp \
 
-#TESTFORTRAN = test_fortran.f
+TESTFORTRAN = test_fortran.f
             
