@@ -534,19 +534,13 @@ PolarInterpolator::PolarInterpolator(const potential::BasePotential& pot){
 		gridE[i] = pot.value(coord::PosCyl(gridR[i],0,0));
 		gridEscaled[i] = scaleE(gridE[i], 1/Phi0);
 	}
-	math::ScalingSemiInf Sc;
-	std::vector<double> gridJz(sizeE), gridJfScaled(sizeE);
 	//gridI3, gridFD, gridUmin;
 	if (potential::isSpherical(pot)|| std::isnan(Phi0) || std::isinf(Phi0)) {
-		double fac=sizeE<=1?1:1/((double)(sizeE-1));
-		for (int i = 0; i < sizeE; i++) {
-			gridJz[i] = 0;
-			/*gridFD.push_back(0);
-			gridI3.push_back(0);//change this
-			//*/
-			gridJfScaled[i]=i*fac;
-		}
+		isS=true;
+		return;
 	} else {
+		math::ScalingSemiInf Sc;
+		std::vector<double> gridJz(sizeE), gridJfScaled(sizeE);
 		std::vector<double> gridJr(sizeE);
 		int N = 7;//number of points to be fitted
 		bool fitted = false;//gets if fitted straight point in E,z1 plane
@@ -631,13 +625,14 @@ PolarInterpolator::PolarInterpolator(const potential::BasePotential& pot){
 			}
             //*/
 		}
+		interpJzJ=math::LinearInterpolator(gridJfScaled,gridJz);
+		interpJzE=math::LinearInterpolator(gridEscaled,gridJz);
 	}
 	/*interpI3 = math::LinearInterpolator(gridEscaled, gridI3);
 	interpFD = math::LinearInterpolator(gridEscaled, gridFD);
 	interpUmin=math::LinearInterpolator(gridEscaled, gridUmin);
     //*/
-	interpJzJ=math::LinearInterpolator(gridJfScaled,gridJz);
-	interpJzE=math::LinearInterpolator(gridEscaled,gridJz);
+	
 	//coeffsJz = math::fitPoly(15, gridJfScaled, gridJz);
 }double estimateFocalDistanceShellOrbit(
 					   const potential::BasePotential& poten, double E, double Jphi,

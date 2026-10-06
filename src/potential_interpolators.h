@@ -131,8 +131,9 @@ class  PolarInterpolator{
 		//std::vector<double> coeffsJz;
 		math::LinearInterpolator interpJzE,interpJzJ;
 		math::ScalingSemiInf Sc;
+		bool isS;
 	public:
-		PolarInterpolator(){}
+		PolarInterpolator():isS(true){}
 		PolarInterpolator(const BasePotential&);//, const PtrShellInterpolator);
 /*		PolarInterpolator(const std::vector<double>& gridEscaled, const std::vector<double>& gridI3,
 				  const std::vector<double>& gridFD, const std::vector<double>& gridJfScaled,
@@ -165,12 +166,13 @@ class  PolarInterpolator{
         //*/
 
 		double getJzcrit(const double E,const double invPhi0) const{
+			if(isS)return 0;
 			const double scaledE = math::clip(scaleE(E, invPhi0),
 				interpJzE.xmin(), interpJzE.xmax());
 			return interpJzE(scaledE);
 		}	
 		double getJzcrit(const double Jf) const{
-			return interpJzJ(scale(Sc,Jf));
+			return isS?0:interpJzJ(scale(Sc,Jf));
 			//return math::evalPoly(coeffsJz, scale(Sc,Jf));
 		}
 };

@@ -158,7 +158,7 @@ void NewExponential::evalDeriv(const actions::Actions &J, double *val, df::Deriv
     double xr = pow(Jvel/par.Jphi0,par.pr)/par.Jr0;
     double xz = pow(Jvel/par.Jphi0,par.pz)/par.Jz0;
     double expr=exp(-xr*J.Jr),expz=exp(-xz*J.Jz);
-    double fr = xr * expr, fz = xz * expz;
+    //double fr = xr * expr, fz = xz * expz;
     double xp = Jden / par.Jphi0;
 
     double fp0 = par.norm/par.Jphi0 / par.Jphi0 * exp(-xp);
@@ -198,19 +198,44 @@ void taperExp::evalDeriv(const actions::Actions &J, double *value, df::DerivByAc
     double xr=pow(Jval/par.Jphi0,par.pr)/par.Jr0;
     double xz=pow(Jval/par.Jphi0,par.pz)/par.Jz0;
     double expr=exp(-xr*J.Jr),expz=exp(-xz*J.Jz);
-    double fr = xr * expr, fz = xz * expz;
+    //double fr = xr * expr, fz = xz * expz;
     double xp=Jden/par.Jphi0;
-    double fp = par.norm/par.Jphi0*Jden/ par.Jphi0 * exp(-xp);
-    *value=fr*fz*fp;
+   // double fp = par.norm/par.Jphi0*Jden/ par.Jphi0 * exp(-xp);
+    double fp0 = par.norm/par.Jphi0/ par.Jphi0 * exp(-xp);
+    double V0 = expr*expz*fp0;
+    *value = xr*xz*Jden*V0;
+    double Ep = 0,facp=1;
     if(par.Jtrans>0){
-        double Ep=exp((J.Jphi-par.Jtaper)/par.Jtrans);
-        *value*=1/(1+1/pow_2(Ep));
+        Ep = exp((J.Jphi-par.Jtaper)/par.Jtrans);
+        facp=1/(1+1/pow_2(Ep));
+        *value*=facp;
     }
+    double Epd = 0, facd=1;
     if(par.Delta>0){
-        double Ep=exp(-(J.Jphi-par.Jcut)/par.Delta);
-        *value*=1/(1+1/pow_2(Ep));
+        Epd = exp(-(J.Jphi-par.Jcut)/par.Delta);
+        facd=1/(1+1/pow_2(Epd));
+        *value*=facd;
     }
-    //need to do derivatives
+    if(dfdJ){
+        double dxrdJt=(Jval!=0)?par.pr*xr/Jval:0;
+        double dxzdJt=(Jval!=0)?par.pz*xz/Jval:0;
+        double dfdJp=xr*xz*V0+V0*Jden*(xz*(1-xr*J.Jr)*dxrdJt+xr*(1-xz*J.Jz)*dxzdJt-xr*xz/par.Jphi0);
+        dfdJ->dbyJr=dfdJp-V0*Jden*pow_2(xr)*xz;
+        dfdJ->dbyJz=dfdJp-V0*Jden*pow_2(xz)*xr;
+        dfdJ->dbyJphi=dfdJp;
+        if(par.Jtrans>0){
+            double dfdJpt=2*xr*xz*Jden*V0*pow_2(facp)/pow_2(Ep)/par.Jtrans;
+            dfdJ->dbyJr=dfdJ->dbyJr*facp;
+            dfdJ->dbyJz=dfdJ->dbyJz*facp;
+            dfdJ->dbyJphi=dfdJ->dbyJphi*facp+dfdJpt;
+        }
+        if(par.Delta>0){
+            double dfdJpD=-2*xr*xz*Jden*V0*pow_2(facd)/pow_2(Epd)/par.Delta;
+            dfdJ->dbyJr=dfdJ->dbyJr*facd;
+            dfdJ->dbyJz=dfdJ->dbyJz*facd;
+            dfdJ->dbyJphi=dfdJ->dbyJphi*facd+dfdJpD;
+        }
+    }
 }
 
 }  // namespace df

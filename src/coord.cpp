@@ -681,30 +681,22 @@ inline void getPosEls(const coord::PosCar &p,const Els els, double& rho, double&
     else cschi2=-b1/(2*b2);
     if(cschi2<0)cschi2=0;
     cschi=math::sign(p.z)*sqrt(cschi2);
-    if(fabs(cschi2)>1)printf("(%f,%f,%f) %f\n",p.x,p.y,p.z,cschi2);
+    //if(fabs(cschi2)>1)printf("(%f,%f,%f) %f\n",p.x,p.y,p.z,cschi2);
     if(fabs(cschi)>1)cschi=math::sign(cschi)*1.;
     snchi=sqrt(1-cschi*cschi);
     phi=0;
     if(cschi2>0.5&&rho>0){
         double X1=fabs(p.x/(rho*sqrt(1-(1-E2)*cschi2)));
-        if(X1>1){
-            printf("nox\n");
-            X1=1;
-        }
+        if(X1>1) X1=1;
         phi=acos(X1);
     }
     else if(els.Deltay2>0||rho>0){
         double Y1=fabs(p.y/(sqrt(rho*rho+els.Deltay2)*snchi));
         if(fabs(Y1)>1)Y1=1;
-        if(Y1>1){
-            printf("noy\n");
-            Y1=1;
-        }
         phi=asin(Y1);
     }
-    
-    if(p.x<0)phi=M_PI-math::sign(p.y)*phi;
-    else if(p.y<0)phi=2*M_PI-phi;
+    if(p.x<0)phi=(M_PI-phi)*math::sign(p.y);
+    else if(p.y<0)phi*=math::sign(p.y);
     //printf("chi:%f\n",snchi);
     //printf("phi:%f\n",phi);
 }

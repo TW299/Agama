@@ -85,8 +85,8 @@ void DoublePowerLaw::evalDeriv(const actions::Actions &J,
 {
     double
     signJphi    = J.Jphi>=0 ? 1 : -1,
-    coefJphiIn  = signJphi,//(3-par.coefJrIn -par.coefJzIn)  * signJphi,
-    coefJphiOut = signJphi,//(3-par.coefJrOut-par.coefJzOut) * signJphi,
+    coefJphiIn  = (3-par.coefJrIn -par.coefJzIn)  * signJphi,
+    coefJphiOut = (3-par.coefJrOut-par.coefJzOut) * signJphi,
     // linear combination of actions in the inner part of the model (for J<~J0)
     h = par.coefJrIn * J.Jr + par.coefJzIn * J.Jz + coefJphiIn * J.Jphi,
     // linear combination of actions in the outer part of the model (for J>~J0)
@@ -127,6 +127,10 @@ NewDoublePowerLaw::NewDoublePowerLaw(const DoublePowerLawParam &inparams) :
     par(inparams), df0(DoublePowerLaw(inparams)){}
 
 double NewDoublePowerLaw::wt(const actions::Actions &J, df::DerivByActions *dwdJ) const{
+    if(par.epsilonJ==0){
+        if(dwdJ)dwdJ->dbyJr=dwdJ->dbyJz=dwdJ->dbyJphi=0;
+        return 0;
+    }
     double E=(par.epsilonJ*(par.epsilonJ+J.Jr+J.Jz));
     double F=1+pow_2(J.Jphi)/E;
     if(dwdJ){
@@ -156,22 +160,21 @@ void NewDoublePowerLaw::evalDeriv(const actions::Actions &J, double *val, df::De
     else{
         J1=actions::Actions(J.Jr,J.Jz+(sgnJphi*J.Jphi-eps),eps);
     }
-    double f1;
-    df0.evalDeriv(J,&f1,deriv);
-    if(w<1){
-        double f0; DerivByActions df0dJ;
-        df0.evalDeriv(J1,&f0,deriv?&df0dJ:NULL);
-        *val=w*(f0)+(1-w)*f1;
+    double f0;
+    df0.evalDeriv(J,&f0,deriv);
+    if(w>0){
+        double f1; DerivByActions df1dJ;
+        df0.evalDeriv(J1,&f1,deriv?&df1dJ:NULL);
+        *val = (1-w)*f0 + w*f1;
         if(deriv){
-            deriv->dbyJr=(1-w)*(deriv->dbyJr)-dwdJ.dbyJr*(f1-f0)+deriv->dbyJr+w*df0dJ.dbyJr;
-            deriv->dbyJz=(1-w)*(deriv->dbyJz)+dwdJ.dbyJz*(f1-f0)+deriv->dbyJz+w*df0dJ.dbyJz;
-            deriv->dbyJphi=(1-w)*(deriv->dbyJphi)-dwdJ.dbyJphi*(f1-f0);
-            if(J.Jz<Jzcrit)deriv->dbyJphi+=w*df0dJ.dbyJr*0.5*sgnJphi;
-            else deriv->dbyJphi+=w*df0dJ.dbyJz*sgnJphi;
+            deriv->dbyJr=(1-w)*(deriv->dbyJr)+dwdJ.dbyJr*(f1-f0)+w*df1dJ.dbyJr;
+            deriv->dbyJz=(1-w)*(deriv->dbyJz)+dwdJ.dbyJz*(f1-f0)+w*df1dJ.dbyJz;
+            deriv->dbyJphi=(1-w)*(deriv->dbyJphi)+dwdJ.dbyJphi*(f1-f0);
+            if(J.Jz<Jzcrit)deriv->dbyJphi+=w*df1dJ.dbyJr*0.5*sgnJphi;
+            else deriv->dbyJphi+=w*df1dJ.dbyJz*sgnJphi;
         }
-
     }else{
-        *val=f1;
+        *val=f0;
         return;
     }
 }

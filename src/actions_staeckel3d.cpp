@@ -155,7 +155,7 @@ void TriaxialFunctionStaeckel::evalDeriv(const double tau,
         *val = ( (E + G) * taupDz - I3 ) * tau - I2* taupDz;
     if(der){
         *der = (E + G) * (taupDz + tau) + dG * taupDz * tau - I3 - I2;
-        if(std::isnan(*der))printf("no:%f %f %f %f\n",tau,G,dG);
+        //if(std::isnan(*der))printf("no:%f %f %f %f\n",tau,G,dG);
     }
     if(der2)
         *der2 = 2 * (E + G) + 2 * dG * (taupDz + tau) + d2G * taupDz * tau;
@@ -393,6 +393,7 @@ TriaxialIntLimits findIntegrationLimitsTriaxi(const TriaxialFunctionBase& fnc)
         //*/
         if(fnc2(-1)>0)lim.Xm_min=math::findRoot(fnc2,-1,Xm,ACCURACY_RANGE);
         else lim.Xm_min=-1;
+        if(std::isnan(lim.Xm_min))lim.Xm_min=-1;
     }
     // find the range for J_lambda (i.e. J_r).
     // We assume that the point lambda is inside or at the edge of the interval where f(lambda)>=0,
@@ -468,7 +469,7 @@ TriaxialIntLimits findIntegrationLimitsTriaxi(const TriaxialFunctionBase& fnc)
 
     // choose the order of Gauss-Legendre integration depending on the approximate eccentricity
     double RperiOverRapo = (lim.rho_min) / (lim.rho_max);
-    lim.integrOrder = integrOrder(RperiOverRapo);
+    lim.integrOrder = math::MAX_GL_ORDER;//integrOrder(RperiOverRapo);
     return lim;
 }
 
@@ -519,8 +520,7 @@ TriaxialActionDerivatives computeActionDerivatives(
     //double delta_minus_nu_max = fnc.point.coordsys.Delta2 - lim.nu_max;
     double singpart = 2 * sqrt(-2 * (nu_max+els.Deltaz2) / integrand.dfdnu_at_nu_max /(-nu_max) ) *
         (math::atan(sqrt( (nu_max+els.Deltaz2) / (-nu_max))));
-    double Lz=math::sign(fnc.point.phidot)*sqrt(2*fnc.I2);
-    der.dJphidI2 =(els.Deltay2/els.Deltaz2<1e-8)?1/Lz:-math::sign(fnc.point.phidot)*(math::integrateGL(transf_m, 0, 1, lim.integrOrder)) / (2*M_PI);
+    der.dJphidI2 = -(math::integrateGL(transf_m, 0, 1, lim.integrOrder)) / (2*M_PI);
     der.dJzdI2 = (math::integrateGL(transf_n, 0, 1, lim.integrOrder)-singpart)/(2*M_PI);
     return der;
 }
@@ -588,8 +588,9 @@ TriaxialGenFuncDerivatives computeGenFuncDerivatives(
 {
     const double signldot = fnc.point.rhodot >= 0 ? +1 : -1;
     const double signndot = -fnc.point.cotchi*fnc.point.chidot >= 0 ? +1 : -1;
-    const double signmdot = //-(fnc.point.phi<.5*M_PI||(fnc.point.phi>M_PI&&fnc.point.phi<1.5*M_PI))?1:-1;
-    fnc.point.phidot >= 0 ? +1 : -1;
+    double signmdot = fnc.point.phidot >= 0 ? +1 : -1;
+    if(fnc.point.phi>.5*M_PI||(fnc.point.phi<0&&fnc.point.phi>-.5*M_PI))
+        signmdot*=-1;
     //printf("sgnl:%f %f %f",signldot,signndot,signmdot);
     TriaxialGenFuncDerivatives der;
     coord::Els els=fnc.point.els;
@@ -631,16 +632,10 @@ TriaxialGenFuncDerivatives computeGenFuncDerivatives(
         (math::atan(sqrt( (nu_max+els.Deltaz2) / (-nu_max))) -
          math::atan(sqrt((nu_max - nu) /(-nu_max))));
         //*/
-    int sgnphi=(fnc.point.phi<.5*M_PI||(fnc.point.phi>M_PI&&fnc.point.phi<1.5*M_PI))?1:-1;
-    double Lz=signmdot*sqrt(2*fnc.I2);
     double dSdI2nophi=signldot * - math::integrateGL(transf_l, 0, yl, lim.integrOrder) / 4
       + signndot * (math::integrateGL(transf_n, yn, 1, lim.integrOrder)-singpart)/4;
-    double phicomp=(els.Deltay2==0)?0:-signmdot*sgnphi*math::integrateGL(transf_m, 0, ym, lim.integrOrder) / 4;
-    //needto do properly
-    if(els.Deltay2/els.Deltaz2<1e-8){
-        der.dSdI2 =fnc.point.phi/Lz+dSdI2nophi;
-    }
-    else der.dSdI2=phicomp+dSdI2nophi;
+    double phicomp=-signmdot*math::integrateGL(transf_m, 0, ym, lim.integrOrder) / 4;
+    der.dSdI2=phicomp+dSdI2nophi;
     //printf("phi:%f\n",fnc.point.phi);
     return der;
 }
@@ -669,7 +664,7 @@ Actions computeActions(const TriaxialFunctionBase& fnc, const TriaxialIntLimits&
 /** Compute angles from the derivatives of integrals of motion and the generating function
     (equation A3 in Sanders 2012). */
 Angles computeAngles(const TriaxialIntDerivatives& derI, const TriaxialGenFuncDerivatives& derS,
-    bool addPiToThetaZ)
+    bool addPiToThetaZ, int addPiToThetaPhi)
 {
     Angles angs;
     angs.thetar   = derS.dSdE*derI.Omegar   + derS.dSdI3*derI.dI3dJr   + derS.dSdI2*derI.dI2dJr;
@@ -677,7 +672,7 @@ Angles computeAngles(const TriaxialIntDerivatives& derI, const TriaxialGenFuncDe
     angs.thetaphi = derS.dSdE*derI.Omegaphi + derS.dSdI3*derI.dI3dJphi + derS.dSdI2*derI.dI2dJphi;
     angs.thetar   = math::wrapAngle(angs.thetar);
     angs.thetaz   = math::wrapAngle(angs.thetaz + M_PI*addPiToThetaZ);
-    angs.thetaphi = math::wrapAngle(angs.thetaphi);
+    angs.thetaphi = math::wrapAngle(angs.thetaphi + M_PI*addPiToThetaPhi);
     return angs;
 }
 
@@ -714,7 +709,10 @@ void evalTriaxialStaeckel(
         if(ang) {
             TriaxialGenFuncDerivatives derS = computeGenFuncDerivatives(fnc, lim);
             bool addPiToThetaZ = fnc.point.chidot>0 && fnc.I2!=0;
-            *ang = computeAngles(derI, derS, addPiToThetaZ);
+            int addPiToThetaPhi = 0;
+            if(fnc.point.phi>.5*M_PI)addPiToThetaPhi=1;
+            if(fnc.point.phi<-.5*M_PI)addPiToThetaPhi=-1;
+            *ang = computeAngles(derI, derS, addPiToThetaZ, addPiToThetaPhi);
         }
     }
     //evalTriaxial(fnc, act, ang, freq);
